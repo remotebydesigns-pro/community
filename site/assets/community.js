@@ -10,7 +10,7 @@
     members: new Map(), admins: new Set(), cats: [],
     cat: "all", feedOffset: 0, entered: false, channel: null,
     thread: null, authMode: "signin",
-    groups: [], feedGroup: null, stats: new Map(), statsAt: 0, topIds: [], bdays: new Map()
+    groups: [], feedGroup: null, stats: new Map(), statsAt: 0, topIds: [], bdays: new Map(), awards: new Map(), applied: new Map()
   };
   var PAGE = 20;
 
@@ -72,6 +72,7 @@
       mega: '<path d="M4 10v4h3l7 4V6L7 10zM17.5 9a4 4 0 0 1 0 6"/>',
       cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
       back: '<path d="M15 5 8 12l7 7"/>',
+      check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
       play: '<circle cx="12" cy="12" r="9"/><path d="m10 8.5 5.5 3.5-5.5 3.5z"/>',
       brief: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3 12.5h18"/>',
       users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
@@ -117,35 +118,49 @@
 
   /* ---------- Badges (typographic marks, no emoji) ---------- */
   var BADGES = [
-    { id: "team", mark: "\u2605", name: "RBD Team", how: "Runs the community.", test: function (s, m) { return S.admins.has(m.user_id); } },
-    { id: "top", mark: "\u265B", name: "Top Contributor", how: "Top 3 most active members in the last 30 days.", test: function (s, m) { return S.topIds.indexOf(m.user_id) >= 0; } },
-    { id: "founding", mark: "\u272A", name: "Founding Member", how: "One of the first 100 members.", test: function (s) { return s.join_rank <= 100; } },
-    { id: "hello", mark: "\u2727", name: "Said Hello", how: "Posted an introduction.", test: function (s) { return s.has_intro; } },
-    { id: "first", mark: "\u270E", name: "First Post", how: "Shared a first post.", test: function (s) { return s.posts >= 1; } },
-    { id: "starter", mark: "\u2726", name: "Conversation Starter", how: "10 posts shared.", test: function (s) { return s.posts >= 10; } },
-    { id: "helper", mark: "\u2756", name: "Helpful Voice", how: "25 comments on other posts.", test: function (s) { return s.comments >= 25; } },
-    { id: "favorite", mark: "\u273A", name: "Crowd Favorite", how: "25 likes received.", test: function (s) { return s.likes_received >= 25; } },
-    { id: "events", mark: "\u25C8", name: "Event Regular", how: "Going to 3 events.", test: function (s) { return s.rsvps >= 3; } },
-    { id: "bootcamp", mark: "\u2691", name: "Bootcamper", how: "Member of the Bootcamp group.", test: function (s) { return s.in_bootcamp; } }
+    { id: "team", mark: "★", c: "#0D2238", name: "RBD Team", how: "Runs the community.", test: function (s, m) { return S.admins.has(m.user_id); } },
+    { id: "top", mark: "♛", c: "#E09A2A", name: "Top Contributor", how: "Top 3 most active members in the last 30 days.", test: function (s, m) { return S.topIds.indexOf(m.user_id) >= 0; } },
+    { id: "founding", mark: "✪", c: "#2B9FD3", name: "Founding Member", how: "One of the first 100 members.", test: function (s) { return s.join_rank <= 100; } },
+    { id: "hello", mark: "✧", c: "#1D8FCF", name: "Said Hello", how: "Posted an introduction.", test: function (s) { return s.has_intro; }, goal: 1, val: function (s) { return s.has_intro ? 1 : 0; } },
+    { id: "first", mark: "✎", c: "#2F8F9D", name: "First Post", how: "Shared a first post.", test: function (s) { return s.posts >= 1; }, goal: 1, val: function (s) { return s.posts; } },
+    { id: "starter", mark: "✦", c: "#7C6CF0", name: "Conversation Starter", how: "10 posts shared.", test: function (s) { return s.posts >= 10; }, goal: 10, val: function (s) { return s.posts; } },
+    { id: "helper", mark: "❖", c: "#22A06B", name: "Helpful Voice", how: "25 comments on other posts.", test: function (s) { return s.comments >= 25; }, goal: 25, val: function (s) { return s.comments; } },
+    { id: "favorite", mark: "✺", c: "#E85D75", name: "Crowd Favorite", how: "25 likes received.", test: function (s) { return s.likes_received >= 25; }, goal: 25, val: function (s) { return s.likes_received; } },
+    { id: "events", mark: "◈", c: "#D97706", name: "Event Regular", how: "Going to 3 events.", test: function (s) { return s.rsvps >= 3; }, goal: 3, val: function (s) { return s.rsvps; } },
+    { id: "bootcamp", mark: "⚑", c: "#16395A", name: "Bootcamper", how: "Member of the Bootcamp group.", test: function (s) { return s.in_bootcamp; } }
   ];
+  // Badges the RBD team gives by hand (Admin: open a member's profile, then "Give a badge")
+  var AWARDS = [
+    { id: "graduate", mark: "✔", c: "#22A06B", name: "Bootcamp Graduate", how: "Completed the RBD Bootcamp." },
+    { id: "certified", mark: "◉", c: "#2B9FD3", name: "Certified", how: "Earned an RBD Academy certificate." },
+    { id: "hired", mark: "➹", c: "#2F8F9D", name: "Got Hired", how: "Landed a remote role." },
+    { id: "mentor", mark: "❂", c: "#7C6CF0", name: "Mentor", how: "Guides and supports other members." },
+    { id: "helper-award", mark: "✚", c: "#0E7490", name: "Community Helper", how: "Goes out of their way to help others." },
+    { id: "host", mark: "✹", c: "#E85D75", name: "Event Host", how: "Led a session for the community." },
+    { id: "rising", mark: "✷", c: "#E09A2A", name: "Rising Star", how: "Stood out to the RBD team." },
+    { id: "spotlight", mark: "☼", c: "#D97706", name: "Spotlight", how: "Featured by the RBD team." }
+  ];
+  function awardDef(id) { return AWARDS.find(function (a) { return a.id === id; }); }
   function badgesFor(m) {
-    var st = S.stats.get(m.user_id);
-    if (!st) return [];
-    return BADGES.filter(function (b) { return b.test(st, m); });
+    var st = S.stats.get(m.user_id) || null;
+    var auto = st ? BADGES.filter(function (b) { return b.test(st, m); }) : BADGES.filter(function (b) { return b.id === "team" && S.admins.has(m.user_id); });
+    var given = (S.awards.get(m.user_id) || []).map(function (x) { var d = awardDef(x.badge); return d ? Object.assign({ awarded: true, note: x.note }, d) : null; }).filter(Boolean);
+    return given.concat(auto);
   }
-  function badgeMarks(m, max) {
-    return badgesFor(m).slice(0, max || 3).map(function (b) {
-      return '<span class="bmark b-' + b.id + '" title="' + esc(b.name) + '" aria-label="' + esc(b.name) + ' badge">' + b.mark + "\uFE0E</span>";
-    }).join("");
+  function bmark(b, big) {
+    return '<span class="bmark' + (big ? " big" : "") + '" style="--bc:' + b.c + '" title="' + esc(b.name) + '" aria-label="' + esc(b.name) + ' badge">' + b.mark + "︎</span>";
   }
+  function badgeMarks(m, max) { return badgesFor(m).slice(0, max || 3).map(function (b) { return bmark(b); }).join(""); }
   async function loadStats(force) {
     if (!force && Date.now() - S.statsAt < 120000) return;
-    var r = await sb.rpc("cm_member_stats");
-    if (r.error) return;
+    var r = await Promise.all([sb.rpc("cm_member_stats"), sb.from("cm_member_badges").select("user_id, badge, note, awarded_at")]);
+    if (r[0].error) return;
     S.stats.clear();
-    (r.data || []).forEach(function (x) { S.stats.set(x.user_id, x); });
-    S.topIds = (r.data || []).filter(function (x) { return x.score_30d > 0; })
+    (r[0].data || []).forEach(function (x) { S.stats.set(x.user_id, x); });
+    S.topIds = (r[0].data || []).filter(function (x) { return x.score_30d > 0; })
       .sort(function (a, b) { return b.score_30d - a.score_30d; }).slice(0, 3).map(function (x) { return x.user_id; });
+    S.awards.clear();
+    (r[1].data || []).forEach(function (x) { var a = S.awards.get(x.user_id) || []; a.push(x); S.awards.set(x.user_id, a); });
     S.statsAt = Date.now();
   }
   var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -535,11 +550,12 @@
         group: name + " posted in " + esc((S.groups.find(function (g) { return g.id === n.group_id; }) || { name: "your group" }).name),
         job: "New opening on the <b>Job Board</b>",
         birthday: "<b>Happy birthday!</b> Everyone at Remote by Designs is celebrating you today.",
+        badge: "You received the <b>" + esc((awardDef(n.badge) || { name: "new" }).name) + "</b> badge" + (name ? " from " + name : ""),
         like: name + " liked your post",
         announcement: "New announcement from " + (name || "the RBD team"),
         event: "New event: <b>" + esc(n.cm_events ? n.cm_events.title : "") + "</b>"
       }[n.kind] || "Update";
-      var href = n.kind === "report" ? "#/admin" : n.kind === "job" ? "#/jobs" : n.kind === "birthday" ? "#/profile" : n.post_id ? "#/post/" + n.post_id : n.event_id ? "#/events" : "#/feed";
+      var href = n.kind === "report" ? "#/admin" : n.kind === "job" ? "#/jobs" : n.kind === "birthday" || n.kind === "badge" ? "#/profile" : n.post_id ? "#/post/" + n.post_id : n.event_id ? "#/events" : "#/feed";
       return '<a class="notif' + (n.read_at ? "" : " unread") + '" href="' + href + '">' +
         (who ? avatar(who, "sm", false) : '<span class="av sm">' + icon(n.kind === "birthday" ? "gift" : "cal") + "</span>") +
         "<span>" + text + "<small>" + ago(n.created_at) + "</small></span></a>";
@@ -591,7 +607,7 @@
   var POST_SELECT = "*, cm_comments(count), cm_likes(user_id)";
   function catName(id) { var c = S.cats.find(function (x) { return x.id === id; }); return c ? c.name : ""; }
 
-  function jobHTML(p) {
+  function jobHTML(p, full) {
     var j = p.job || {}, apply = safeUrl(j.apply_url), mail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(j.apply_url || "") ? "mailto:" + j.apply_url : "";
     var bits = [j.company, j.type, j.location, j.pay].filter(Boolean);
     return '<div class="job">' +
@@ -599,8 +615,26 @@
       (bits.length ? '<div class="job-bits">' + bits.map(function (b) { return "<span>" + esc(b) + "</span>"; }).join("") + "</div>" : "") + "</div>" +
       '<span class="job-status ' + (p.job_closed ? "closed" : "open") + '">' + (p.job_closed ? "Filled" : "Open") + "</span></div>" +
       (j.closes_on ? '<p class="tiny muted job-close">Apply by ' + esc(fmtDate(j.closes_on + "T12:00:00", { month: "long", day: "numeric", year: "numeric" })) + "</p>" : "") +
-      (!p.job_closed && (apply || mail) ? '<a class="btn btn-gold btn-sm job-apply" href="' + esc(apply || mail) + '" target="_blank" rel="noopener nofollow">Apply now</a>' : "") +
-      "</div>";
+      '<div class="job-actions">' +
+      (!p.job_closed && (apply || mail) ? '<a class="btn btn-gold btn-sm" href="' + esc(apply || mail) + '" target="_blank" rel="noopener nofollow">Apply now</a>' : "") +
+      (!p.job_closed ? '<button class="btn btn-line btn-sm applied-btn" type="button" data-act="applied" aria-pressed="false">' + icon("check") + "I applied</button>" : "") +
+      '<button class="applied-n" type="button" data-act="applied-list"' + (S.isAdmin ? "" : " disabled") + '><b data-applied-count>0</b> applied</button>' +
+      '<button class="linkish tiny job-more" type="button" data-act="job-more" aria-expanded="' + !!full + '">' + (full ? "Hide details" : "View details") + "</button>" +
+      "</div></div>";
+  }
+  async function hydrateApplied(root) {
+    var ids = $$("[data-post].is-job", root || document).map(function (el) { return el.dataset.post; });
+    if (!ids.length) return;
+    var r = await sb.rpc("cm_job_applied", { pids: ids });
+    (r.data || []).forEach(function (x) {
+      S.applied.set(x.post_id, x);
+      $$('[data-post="' + x.post_id + '"]', root || document).forEach(function (el) { paintApplied(el, x); });
+    });
+  }
+  function paintApplied(el, x) {
+    var n = $("[data-applied-count]", el); if (n) n.textContent = x.applied;
+    var b = $(".applied-btn", el);
+    if (b) { b.setAttribute("aria-pressed", String(!!x.mine)); b.classList.toggle("on", !!x.mine); b.lastChild.textContent = x.mine ? "You applied" : "I applied"; }
   }
   function catClass(id) { return "c-" + String(id || "general").replace(/[^a-z0-9-]/g, ""); }
 
@@ -628,9 +662,9 @@
       (p.edited_at ? '<span class="muted" title="Edited ' + esc(fmtWhen(p.edited_at)) + '">· edited</span>' : "") +
       (grp ? '<span class="tag lock">' + icon("lock") + esc(grp.name) + "</span>" : '<span class="tag ' + catClass(p.category_id) + '">' + esc(catName(p.category_id)) + "</span>") +
       "</div></div>" + menu + "</div>" +
-      (isJob && p.job ? jobHTML(p) : "") +
-      '<div class="post-body' + (long && !opts.full ? " clamp" : "") + '">' + linkify(p.body) + "</div>" +
-      (long && !opts.full ? '<button class="read-more" type="button" data-act="more">Read more</button>' : "") +
+      (isJob && p.job ? jobHTML(p, opts.full) : "") +
+      '<div class="post-body' + (long && !opts.full && !isJob ? " clamp" : "") + '"' + (isJob && p.job && !opts.full ? " hidden" : "") + ">" + linkify(p.body) + "</div>" +
+      (long && !opts.full && !isJob ? '<button class="read-more" type="button" data-act="more">Read more</button>' : "") +
       (img ? '<a class="post-img-link" href="' + esc(img) + '" target="_blank" rel="noopener"><img class="post-img" src="' + esc(img) + '" alt="Image shared by ' + esc(a.display_name) + '" loading="lazy" onerror="this.closest(\'a\').classList.add(\'broken\')"><span class="img-fallback">' + icon("image") + "Open image</span></a>" : "") +
       (p.video_url ? videoEmbed(p.video_url) : "") +
       (link ? '<a class="post-link" href="' + esc(link) + '" target="_blank" rel="noopener nofollow ugc">' + icon("link") + esc(link) + "</a>" : "") +
@@ -706,6 +740,30 @@
         startEdit(postEl, ep.data);
       }
       else if (act === "report") { btn.closest(".pop").hidden = true; openReport(id, null); }
+      else if (act === "job-more") {
+        var bd = $(".post-body", postEl), show = bd.hidden;
+        bd.hidden = !show; btn.setAttribute("aria-expanded", String(show)); btn.textContent = show ? "Hide details" : "View details";
+      }
+      else if (act === "applied") {
+        var cur = S.applied.get(id) || { post_id: id, applied: 0, mine: false };
+        btn.disabled = true;
+        var ar = cur.mine ? await sb.from("cm_job_applies").delete().eq("post_id", id).eq("user_id", S.user.id)
+                          : await sb.from("cm_job_applies").insert({ post_id: id, user_id: S.user.id });
+        btn.disabled = false;
+        if (ar.error && ar.error.code !== "23505") throw ar.error;
+        var nx = { post_id: id, applied: Math.max(0, cur.applied + (cur.mine ? -1 : 1)), mine: !cur.mine };
+        S.applied.set(id, nx); paintApplied(postEl, nx);
+        toast(nx.mine ? "Marked as applied. Good luck!" : "Removed your applied mark.");
+      }
+      else if (act === "applied-list") {
+        if (!S.isAdmin) return;
+        var al = await sb.from("cm_job_applies").select("user_id, created_at").eq("post_id", id).order("created_at");
+        if (al.error) throw al.error;
+        await ensureMembers(al.data.map(function (x) { return x.user_id; }));
+        modal("Who applied (" + al.data.length + ")", al.data.length ? al.data.map(function (x) { var m = member(x.user_id);
+          return '<a class="who-row" href="#/u/' + m.user_id + '">' + avatar(m, "sm", false) + "<b>" + esc(m.display_name) + '</b><span class="tiny muted">' + ago(x.created_at) + "</span></a>"; }).join("")
+          : '<p class="muted">No one has marked this job as applied yet.</p>');
+      }
       else if (act === "job-toggle") {
         var closed = postEl.classList.contains("job-closed");
         var jt = await sb.from("cm_posts").update({ job_closed: !closed }).eq("id", id);
@@ -883,6 +941,7 @@
     else box.insertAdjacentHTML("beforeend", html);
     S.feedOffset += r.data.length;
     $("#morePosts").hidden = r.data.length < PAGE;
+    hydrateApplied(box);
   }
 
   async function renderSideCol(col) {
@@ -912,23 +971,23 @@
         return '<a class="job-mini" href="#/jobs"><b>' + esc(x.title || "Open role") + "</b><span>" + esc([x.type, x.pay].filter(Boolean).join(" · ")) + "</span></a>";
       }).join("") : '<p class="muted">No openings right now. Check back soon.</p>') + "</section>" +
       (tops.length ? '<section class="card side-card"><div class="card-title">' + icon("spark") + 'Top contributors<a href="#/members">All</a></div>' +
-        tops.map(function (m, i) { return '<a class="who-row rank" href="#/u/' + m.user_id + '"><span class="rank-n">' + (i + 1) + "</span>" + avatar(m, "sm", false) + "<b>" + esc(m.display_name) + '</b><span class="bmark b-top" aria-hidden="true">♛︎</span></a>'; }).join("") + "</section>" : "");
+        tops.map(function (m, i) { return '<a class="who-row rank" href="#/u/' + m.user_id + '"><span class="rank-n">' + (i + 1) + "</span>" + avatar(m, "sm", false) + "<b>" + esc(m.display_name) + '</b>' + bmark(BADGES[1]) + '</a>'; }).join("") + "</section>" : "");
   }
 
   /* ---------- Job Board ---------- */
   async function renderJobs(main) {
-    main.innerHTML = '<div class="grid-feed"><div class="col">' +
+    main.innerHTML = '<div class="col jobs-page">' +
       '<section class="card page-hero jobs-hero"><div class="hello-glow" aria-hidden="true"></div><p class="eyebrow"><span class="dot"></span>Job Board</p><h1>Openings for the community</h1>' +
-      "<p>Remote roles the RBD team has found or been asked to share. Apply directly through each post. You'll get an email when a new one goes up (you can turn that off in My Profile).</p></section>" +
+      "<p>Remote roles the RBD team has found or been asked to share. Tap <b>View details</b> to read more, apply through the post, then tap <b>I applied</b> so we can cheer you on.</p></section>" +
       (S.isAdmin ? '<details class="card post-job"><summary>' + icon("brief") + "Post a job</summary>" + composerHTML("jobs") + "</details>" : "") +
       '<button class="btn btn-gold" type="button" id="newPosts" hidden>New openings. Show them</button>' +
       '<div class="col" id="posts"></div>' +
       '<button class="btn btn-line" type="button" id="morePosts" hidden>Load more</button>' +
-      '</div><div class="col sticky-col side-col" id="sideCol"></div></div>';
+      "</div>";
     if (S.isAdmin) bindComposer($(".composer", main), "jobs", function (p) { var box = $("#posts"); var e = $(".empty", box); if (e) e.remove(); box.insertAdjacentHTML("afterbegin", postHTML(p)); $(".post-job", main).open = false; });
     $("#morePosts").addEventListener("click", function () { loadFeed(false, { jobs: true }); });
     $("#newPosts").addEventListener("click", function () { this.hidden = true; loadFeed(true, { jobs: true }); });
-    await Promise.all([loadFeed(true, { jobs: true }), renderSideCol($("#sideCol"))]);
+    await loadFeed(true, { jobs: true });
   }
 
   /* ---------- Private groups (e.g. Bootcamp) ---------- */
@@ -998,7 +1057,7 @@
     var pg = r.data.group_id ? S.groups.find(function (g) { return g.id === r.data.group_id; }) : null;
     var back = pg ? '<a href="#/g/' + esc(pg.slug) + '" class="linkish">← Back to ' + esc(pg.name) + "</a>" : r.data.category_id === "jobs" ? '<a href="#/jobs" class="linkish">← Back to the Job Board</a>' : '<a href="#/feed" class="linkish">← Back to the feed</a>';
     main.innerHTML = '<div class="grid-feed"><div class="col">' + back + postHTML(r.data, { full: true }) + '</div><div class="col sticky-col side-col" id="sideCol"></div></div>';
-    await Promise.all([loadComments($("[data-post]", main)), renderSideCol($("#sideCol"))]);
+    await Promise.all([loadComments($("[data-post]", main)), renderSideCol($("#sideCol")), hydrateApplied(main)]);
   }
 
   /* ---------- Messages ---------- */
@@ -1188,7 +1247,8 @@
   }
   function showBadgeGuide() {
     modal("Badges", '<p class="muted">Badges show up on profiles, member cards and next to names in the feed. They update on their own as you take part.</p>' +
-      '<ul class="badge-guide">' + BADGES.map(function (b) { return '<li><span class="bmark big b-' + b.id + '" aria-hidden="true">' + b.mark + "︎</span><span><b>" + esc(b.name) + "</b><small>" + esc(b.how) + "</small></span></li>"; }).join("") + "</ul>");
+      '<h3 class="bg-h">Earned by taking part</h3><ul class="badge-guide">' + BADGES.map(function (b) { return "<li>" + bmark(b, true) + "<span><b>" + esc(b.name) + "</b><small>" + esc(b.how) + "</small></span></li>"; }).join("") + "</ul>" +
+      '<h3 class="bg-h">Given by the RBD team</h3><ul class="badge-guide">' + AWARDS.map(function (b) { return "<li>" + bmark(b, true) + "<span><b>" + esc(b.name) + "</b><small>" + esc(b.how) + "</small></span></li>"; }).join("") + "</ul>");
   }
 
   /* ---------- Profiles ---------- */
@@ -1212,15 +1272,24 @@
       (m.bio ? '<p class="profile-bio">' + linkify(m.bio) + "</p>" : mine ? '<p class="profile-bio muted">Add a short bio so others know what you do and what you\'re working toward.</p>' : "") +
       '<div class="pstats"><span><b>' + (st.posts || 0) + "</b>posts</span><span><b>" + (st.comments || 0) + "</b>comments</span><span><b>" + (st.likes_received || 0) + "</b>likes received</span><span><b>" + earned.length + "</b>badges</span></div>" +
       "</section>" +
-      '<section class="card"><div class="card-title">Badges<button class="linkish" type="button" id="howBadges2">How badges work</button></div><div class="badges">' +
-      BADGES.filter(function (b) { return b.id !== "team" || earnedIds.indexOf("team") >= 0; }).map(function (b) {
-        var on = earnedIds.indexOf(b.id) >= 0;
-        return '<div class="badge' + (on ? " on b-" + b.id : " locked") + '" title="' + esc(b.how) + '"><span class="bmark big" aria-hidden="true">' + b.mark + "︎</span><b>" + esc(b.name) + "</b><small>" + (on ? "Earned" : esc(b.how)) + "</small></div>";
+      '<section class="card badges-card"><div class="card-title">' + icon("spark") + "Badges · " + earned.length + ' earned' +
+      (S.isAdmin && !mine ? '<button class="btn btn-gold btn-sm" type="button" id="giveBadge">Give a badge</button>' : "") +
+      '<button class="linkish" type="button" id="howBadges2">How badges work</button></div><div class="badges">' +
+      earned.map(function (b) {
+        return '<div class="badge on" style="--bc:' + b.c + '" title="' + esc(b.how) + '">' + bmark(b, true) + "<b>" + esc(b.name) + "</b>" +
+          '<small>' + esc(b.awarded ? (b.note || b.how) : b.how) + "</small>" + '<span class="earned">' + (b.awarded ? "Given by RBD" : "Earned") + "</span></div>";
+      }).join("") +
+      BADGES.filter(function (b) { return b.id !== "team" && b.id !== "top" && b.id !== "bootcamp" && b.id !== "founding" && earnedIds.indexOf(b.id) < 0; }).map(function (b) {
+        var v = b.val ? Math.min(b.val(st), b.goal) : 0, pct = b.goal ? Math.round(v / b.goal * 100) : 0;
+        return '<div class="badge locked" style="--bc:' + b.c + '" title="' + esc(b.how) + '">' + bmark(b, true) + "<b>" + esc(b.name) + "</b><small>" + esc(b.how) + "</small>" +
+          (b.goal ? '<span class="prog" role="img" aria-label="' + v + " of " + b.goal + '"><i style="width:' + pct + '%"></i></span><span class="prog-n">' + v + " / " + b.goal + "</span>" : "") + "</div>";
       }).join("") + "</div></section>" +
       (mine ? profileFormHTML(m, myB) : "") +
       '<h2 style="font-size:18px">' + (mine ? "Your posts" : "Posts") + "</h2>" +
       (posts.data.length ? posts.data.map(function (p) { return postHTML(p); }).join("") : '<div class="card empty">No posts yet.</div>') + "</div>";
     $("#howBadges2").addEventListener("click", showBadgeGuide);
+    hydrateApplied(main);
+    var gb = $("#giveBadge"); if (gb) gb.addEventListener("click", function () { giveBadges(m); });
     if (mine) {
       bindProfileForm(m);
       var prefsCard = document.createElement("section");
@@ -1230,6 +1299,31 @@
       renderPrefs($(".prefs", prefsCard));
       if (openEdit) { $("#profileForm", main).hidden = false; $("#profileForm", main).display_name.focus(); }
     }
+  }
+  function giveBadges(m) {
+    var have = new Set((S.awards.get(m.user_id) || []).map(function (x) { return x.badge; }));
+    var d = modal("Give " + m.display_name.split(" ")[0] + " a badge",
+      '<p class="muted">Tap a badge to give it or take it back. They get a notification right away.</p><div class="award-list" id="awardList"></div>' +
+      '<label>Note (optional, shows on their profile)<input id="awardNote" maxlength="140" placeholder="e.g. Bootcamp Batch 1 · Oct 2026"></label>', { wide: true, onClose: function () { route(); } });
+    function paint() {
+      $("#awardList", d).innerHTML = AWARDS.map(function (a) {
+        var on = have.has(a.id);
+        return '<button type="button" class="award' + (on ? " on" : "") + '" style="--bc:' + a.c + '" data-award="' + a.id + '" aria-pressed="' + on + '">' + bmark(a, true) +
+          "<span><b>" + esc(a.name) + "</b><small>" + esc(a.how) + "</small></span><em>" + (on ? "Given ✓" : "Give") + "</em></button>";
+      }).join("");
+    }
+    paint();
+    $("#awardList", d).addEventListener("click", async function (e) {
+      var b = e.target.closest("[data-award]"); if (!b) return;
+      var id = b.dataset.award, on = have.has(id); b.disabled = true;
+      var r = on ? await sb.from("cm_member_badges").delete().eq("user_id", m.user_id).eq("badge", id)
+                 : await sb.from("cm_member_badges").insert({ user_id: m.user_id, badge: id, note: $("#awardNote", d).value.trim() || null });
+      b.disabled = false;
+      if (r.error && r.error.code !== "23505") { fail(r.error); return; }
+      if (on) have.delete(id); else have.add(id);
+      await loadStats(true); paint();
+      toast(on ? "Badge removed." : awardDef(id).name + " given to " + m.display_name.split(" ")[0] + ".");
+    });
   }
   function birthdayFieldsHTML(b) {
     b = b || {};

@@ -1,12 +1,20 @@
 # Remote by Designs Community
 
 **Live address:** https://community.remotebydesigns.com
-**Current version:** `community-v3` (Oct 16, 2026)
+**Current version:** `community-v4` (Oct 16, 2026)
 **Replaces:** https://remote-bond-hub.base44.app
 
 A members-only community for RBD learners, freelancers, aspiring VAs and remote professionals. It's a plain static site (no build step), hosted on Vercel. It uses the **same Supabase project as RBD Academy**, so members sign in with their Academy email and password.
 
 ---
+
+## What's new in v4 (Oct 16, 2026)
+
+- **Profile header fixed:** the name and headline now sit below the colour band, so they're always readable.
+- **Colourful badges:** each badge has its own colour. Earned badges are highlighted; the rest show progress (for example 4 / 25 likes).
+- **Give a badge (admins):** open any member's profile and click **Give a badge**. Choose from Bootcamp Graduate, Certified, Got Hired, Mentor, Community Helper, Event Host, Rising Star or Spotlight, with an optional note. Click again to take it back. The member gets a bell notification.
+- **Job Board:** one wide column with no side widgets. The description is hidden until someone taps **View details**. Members tap **I applied** to mark that they applied; everyone sees the count, and admins can click the count to see who applied.
+- Database changes: `supabase/community-v4.sql` (applied Oct 16, 2026).
 
 ## What's new in v3 (Oct 16, 2026)
 

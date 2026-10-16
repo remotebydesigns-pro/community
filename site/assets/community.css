@@ -638,3 +638,64 @@ html,body{max-width:100%;overflow-x:clip}
 .who-row .av{flex:none}
 :root[data-theme="dark"] .b-team{background:var(--gold);color:#0D2238}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .b-team{background:var(--gold);color:#0D2238}}
+
+/* =========================================================
+   v4 (Oct 16, 2026): profile header, colourful badges, job board
+   ========================================================= */
+/* Profile header: avatar overlaps the band, name and details sit below it */
+.profile-card .profile-hero{margin-top:0;align-items:flex-start}
+.profile-card .profile-hero > .av.lg{margin-top:-46px;box-shadow:var(--sh-soft)}
+.profile-card .profile-hero > div{padding-top:14px}
+.profile-card .profile-hero > .btn{margin-top:14px}
+.profile-card .profile-hero h1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;line-height:1.2}
+.profile-card .profile-bio{margin-top:14px}
+
+/* Badge marks: each badge has its own colour (--bc) */
+.bmark{background:color-mix(in srgb,var(--bc,var(--teal)) 16%,transparent);color:var(--bc,var(--teal))}
+:root[data-theme="dark"] .bmark{background:color-mix(in srgb,var(--bc,var(--teal)) 30%,transparent);color:color-mix(in srgb,var(--bc,var(--teal)) 45%,#fff)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .bmark{background:color-mix(in srgb,var(--bc,var(--teal)) 30%,transparent);color:color-mix(in srgb,var(--bc,var(--teal)) 45%,#fff)}}
+.bmark.big{width:48px;height:48px;font-size:23px;color:#fff;background:linear-gradient(140deg,color-mix(in srgb,var(--bc) 80%,#fff),var(--bc));box-shadow:0 10px 20px -10px var(--bc),inset 0 1px 0 rgba(255,255,255,.35)}
+
+/* Badge cards */
+.badges-card .card-title{flex-wrap:wrap}
+.badges-card .card-title .btn{margin-left:auto;letter-spacing:0;text-transform:none}
+.badges-card .card-title .btn + .linkish{margin-left:12px}
+.badges{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.badge{position:relative;padding:18px 12px 16px;gap:7px;transition:transform .2s,box-shadow .2s}
+.badge b{font-size:14px;color:var(--ink)}
+.badge small{color:var(--muted);font-size:12px}
+.badge.on{border:1px solid color-mix(in srgb,var(--bc) 35%,var(--line));background:linear-gradient(170deg,color-mix(in srgb,var(--bc) 13%,var(--surface)) 0%,var(--surface) 70%);box-shadow:0 14px 26px -18px var(--bc)}
+.badge.on:hover{transform:translateY(-3px)}
+.badge .earned{margin-top:2px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--bc) 16%,transparent);color:color-mix(in srgb,var(--bc) 75%,var(--ink))}
+.badge.locked{border:1px dashed var(--line);background:var(--surface)}
+.badge.locked .bmark.big{background:var(--surface-2);color:color-mix(in srgb,var(--bc) 55%,var(--muted));box-shadow:none;opacity:1}
+.badge.locked b{color:var(--ink);opacity:.85}
+.prog{display:block;width:80%;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,color-mix(in srgb,var(--bc) 60%,#fff),var(--bc))}
+.prog-n{font-size:11.5px;font-weight:600;color:var(--muted)}
+.bg-h{font-size:14px;margin:14px 0 8px}
+.award-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:6px 0 14px}
+.award{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;border:1px solid var(--line);background:var(--surface);text-align:left;cursor:pointer;color:var(--ink);transition:border-color .15s,transform .15s}
+.award:hover{transform:translateY(-2px);border-color:var(--bc)}
+.award span{flex:1;min-width:0} .award b{display:block;font-size:14px} .award small{display:block;font-size:12px;color:var(--muted);line-height:1.35}
+.award em{font-style:normal;font-size:12px;font-weight:700;color:var(--accent-text)}
+.award.on{border-color:var(--bc);background:color-mix(in srgb,var(--bc) 10%,var(--surface))}
+.award.on em{color:var(--bc)}
+
+/* Job Board: one wide column; details on demand; "I applied" */
+.jobs-page{max-width:860px}
+.job-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.job-actions .job-more{margin-left:auto}
+.applied-btn svg.i{width:15px;height:15px}
+.applied-btn.on{background:rgba(34,160,107,.12);border-color:#22A06B;color:#167A50}
+.applied-n{border:0;background:none;padding:4px 6px;font-size:13px;color:var(--muted);border-radius:8px}
+.applied-n b{color:var(--ink)}
+.applied-n:not(:disabled){cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.applied-n:disabled{cursor:default}
+.is-job .post-body{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface-2)}
+@media (max-width:720px){
+  .job-actions .job-more{margin-left:0}
+  .profile-card .profile-hero > div{padding-top:0}
+}
+.award .bmark,.badge-guide .bmark,.badge .bmark{flex:none}
+.bmark:not(.big){background:color-mix(in srgb,var(--bc,var(--teal)) 22%,transparent);font-weight:700}
