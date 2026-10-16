@@ -118,7 +118,7 @@
 
   /* ---------- Badges (typographic marks, no emoji) ---------- */
   var BADGES = [
-    { id: "team", mark: "★", c: "#0D2238", name: "RBD Team", how: "Runs the community.", test: function (s, m) { return S.admins.has(m.user_id); } },
+    { id: "team", mark: "★", c: "#1D5F8E", name: "RBD Team", how: "Runs the community.", test: function (s, m) { return S.admins.has(m.user_id); } },
     { id: "top", mark: "♛", c: "#E09A2A", name: "Top Contributor", how: "Top 3 most active members in the last 30 days.", test: function (s, m) { return S.topIds.indexOf(m.user_id) >= 0; } },
     { id: "founding", mark: "✪", c: "#2B9FD3", name: "Founding Member", how: "One of the first 100 members.", test: function (s) { return s.join_rank <= 100; } },
     { id: "hello", mark: "✧", c: "#1D8FCF", name: "Said Hello", how: "Posted an introduction.", test: function (s) { return s.has_intro; }, goal: 1, val: function (s) { return s.has_intro ? 1 : 0; } },
@@ -1264,11 +1264,11 @@
     var earned = badgesFor(m), st = S.stats.get(id) || {};
     var earnedIds = earned.map(function (b) { return b.id; });
     main.innerHTML = '<div class="col" style="max-width:820px">' +
-      '<section class="card profile-card"><div class="profile-band" aria-hidden="true"></div><div class="profile-hero">' + avatar(m, "lg", false) + '<div style="flex:1;min-width:200px"><h1>' + esc(m.display_name) + " " + adminTag(id) + "</h1>" +
+      '<section class="card profile-card"><div class="profile-top"><div class="profile-hero">' + avatar(m, "lg", false) + '<div style="flex:1;min-width:200px"><h1>' + esc(m.display_name) + " " + adminTag(id) + "</h1>" +
       (m.headline ? '<p class="headline">' + esc(m.headline) + "</p>" : "") +
       '<p class="tiny muted">' + (m.location ? esc(m.location) + " · " : "") + "Joined " + fmtDate(m.joined_at, { month: "long", year: "numeric" }) +
       (pubB ? " · " + icon("gift") + " Birthday " + MONTHS[pubB.month - 1] + " " + pubB.day : "") + "</p></div>" +
-      (mine ? '<button class="btn btn-line" type="button" id="editProfileBtn">Edit profile</button>' : '<a class="btn btn-navy" href="#/messages/' + id + '">Message</a>') + "</div>" +
+      (mine ? '<button class="btn btn-glass" type="button" id="editProfileBtn">Edit profile</button>' : '<a class="btn btn-gold" href="#/messages/' + id + '">Message</a>') + "</div></div>" +
       (m.bio ? '<p class="profile-bio">' + linkify(m.bio) + "</p>" : mine ? '<p class="profile-bio muted">Add a short bio so others know what you do and what you\'re working toward.</p>' : "") +
       '<div class="pstats"><span><b>' + (st.posts || 0) + "</b>posts</span><span><b>" + (st.comments || 0) + "</b>comments</span><span><b>" + (st.likes_received || 0) + "</b>likes received</span><span><b>" + earned.length + "</b>badges</span></div>" +
       "</section>" +
