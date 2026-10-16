@@ -8,6 +8,30 @@ A members-only community for RBD learners, freelancers, aspiring VAs and remote 
 
 ---
 
+## Progress (updated Oct 16, 2026)
+
+**Done**
+- [x] Community built from the Base44 screenshot, restyled in RBD brand colours (Poppins, navy/teal/sky/gold, light + dark, phone layout).
+- [x] Database added to the *Remote By Designs Framework* Supabase project (shared with the Academy): `cm_*` tables, access rules, notifications, live updates, `community` image bucket.
+- [x] Access rules tested inside the real database (15 checks, all rolled back): signed-out visitors blocked, no posting as someone else, only admins post announcements, pin or create events, private messages hidden even from admins.
+- [x] Every page tested in a browser with sample data: no errors, no sideways scrolling on phones.
+- [x] Code in GitHub: `remotebydesigns-pro/community`, branch `main`.
+- [x] Deployed to Vercel (project `rbd-community`) with `community.remotebydesigns.com` attached.
+
+**To do (owner)**
+- [ ] Cloudflare DNS: `CNAME community → cname.vercel-dns.com`, proxy off (section 2, step 4). The address won't open until this is done.
+- [ ] Supabase redirect URL: add `https://community.remotebydesigns.com/**` (section 2, step 2).
+- [ ] First real sign-in with the admin account, then post the welcome announcement and first events.
+- [ ] Revoke the Base44 access token that was shared in chat.
+- [ ] Optional: install the Vercel GitHub app for `remotebydesigns-pro` so pushes deploy automatically.
+
+**Open items**
+- The tests that edit, delete or pause (members can't edit others' posts, can't un-pause themselves, paused members are locked out) didn't run: the database tool needed an approval. The rules were checked by reading them. Re-test after the first real sign-in.
+- Old Base44 posts and members were **not** moved over (we only had a screenshot). Members re-join by signing in with their Academy account.
+- Supabase's security check flags some existing **Academy** functions callable without signing in (e.g. `wolf_reset`, `wolf_claim`). Worth confirming each one checks permissions itself. Not part of the community.
+
+---
+
 ## 1. What's in it
 
 | Menu | What it does |
