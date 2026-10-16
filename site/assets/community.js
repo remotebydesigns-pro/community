@@ -75,6 +75,21 @@
     return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + P[name] + "</svg>";
   }
 
+  /* A simple dialog. body is HTML; returns the <dialog> element (removed from the page when closed). */
+  function modal(title, body, opts) {
+    opts = opts || {};
+    var d = document.createElement("dialog");
+    d.className = "modal" + (opts.wide ? " wide" : "");
+    d.setAttribute("aria-label", title);
+    d.innerHTML = '<div class="modal-head"><h2>' + esc(title) + '</h2>' +
+      (opts.noClose ? "" : '<button class="round modal-x" type="button" aria-label="Close">✕</button>') + "</div>" + body;
+    document.body.appendChild(d);
+    var x = $(".modal-x", d); if (x) x.addEventListener("click", function () { d.close(); });
+    d.addEventListener("close", function () { if (opts.onClose) opts.onClose(); d.remove(); });
+    d.showModal();
+    return d;
+  }
+
   async function uploadImage(file) {
     if (!file) return null;
     if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) throw new Error("Please choose a JPG, PNG, WebP or GIF image.");
@@ -180,6 +195,186 @@
     subscribe();
     refreshCounts();
     route();
+    if (S.me && !S.me.onboarded_at) openOnboarding();
+  }
+
+  /* ---------- First-run welcome: profile → introduce yourself → email settings ---------- */
+  var INTRO_TEMPLATE = function (m) {
+    var first = (m.display_name || "").split(" ")[0];
+    return "Hi everyone! I'm " + (first && first !== "Member" ? first : "___") + (m.location ? " from " + m.location : "") + ".\n\n" +
+      "👋 What I do (or want to do): \n" +
+      "🎯 My goal for the next 90 days: \n" +
+      "🧰 A skill or tool I'm learning: \n" +
+      "💬 Happy to help with: ";
+  };
+  async function markOnboarded() {
+    if (S.me.onboarded_at) return;
+    var r = await sb.from("cm_members").update({ onboarded_at: new Date().toISOString() }).eq("user_id", S.user.id).select().single();
+    if (!r.error && r.data) { S.me = r.data; S.members.set(S.user.id, r.data); }
+  }
+  function openOnboarding() {
+    var m = S.me, first = (m.display_name || "").split(" ")[0], photo = null, step = 1;
+    var d = modal("Welcome to the community", '<div class="ob-steps" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div class="ob-body" id="obBody"></div>', {
+      wide: true, onClose: function () { markOnboarded(); }
+    });
+    var body = $("#obBody", d), dots = $$(".ob-steps span", d);
+    function paint() {
+      dots.forEach(function (s, i) { s.classList.toggle("on", i < step); });
+      if (step === 1) {
+        body.innerHTML =
+          '<p class="eyebrow"><span class="dot"></span>Step 1 of 4</p>' +
+          "<h3>Hi " + esc(first && first !== "Member" ? first : "there") + ", glad you're here 👋</h3>" +
+          '<p class="muted">This is where RBD learners, freelancers and remote professionals help each other grow. Here\'s how it works:</p>' +
+          '<ul class="ob-list"><li><b>Ask and share.</b> Post questions, tools, wins and lessons in the feed.</li>' +
+          "<li><b>Show up live.</b> Join workshops and Q&amp;As on the Events page.</li>" +
+          "<li><b>Connect.</b> Message other members directly. Be kind, and no selling in DMs.</li></ul>" +
+          '<div class="ob-actions"><button class="btn btn-navy" type="button" data-ob="next">Set up my profile</button><button class="linkish" type="button" data-ob="skip">Skip for now</button></div>';
+      } else if (step === 2) {
+        body.innerHTML =
+          '<p class="eyebrow"><span class="dot"></span>Step 2 of 4</p><h3>Help people know who you are</h3>' +
+          '<p class="muted">A photo and headline help members recognise you and know how to help.</p>' +
+          '<form class="stack" id="obProfile"><div class="avatar-edit">' + avatar(m, "lg", false) +
+          '<label class="btn btn-line btn-sm" style="flex-direction:row;color:var(--ink)">Add a photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" hidden></label></div>' +
+          '<label>Name<input name="display_name" maxlength="80" required value="' + esc(m.display_name === "Member" ? "" : m.display_name) + '" autocomplete="name"></label>' +
+          '<label>Headline<input name="headline" maxlength="120" placeholder="e.g. Aspiring VA · Real estate support · Learning GoHighLevel" value="' + esc(m.headline || "") + '"></label>' +
+          '<label>Location<input name="location" maxlength="80" placeholder="e.g. Cebu, Philippines" value="' + esc(m.location || "") + '"></label>' +
+          '<div class="ob-actions"><button class="btn btn-navy" type="submit">Save and continue</button><button class="linkish" type="button" data-ob="next">Skip this step</button></div></form>';
+        var f = $("#obProfile", body);
+        f.photo.addEventListener("change", function () {
+          photo = this.files[0] || null;
+          if (photo) $(".avatar-edit .av", f).innerHTML = '<img src="' + URL.createObjectURL(photo) + '" alt="">';
+        });
+        f.addEventListener("submit", async function (e) {
+          e.preventDefault();
+          var b = $("button[type=submit]", f); b.disabled = true;
+          try {
+            var upd = { display_name: f.display_name.value.trim(), headline: f.headline.value.trim() || null, location: f.location.value.trim() || null };
+            if (!upd.display_name) throw new Error("Please enter your name.");
+            if (photo) upd.avatar_url = await uploadImage(photo);
+            var r = await sb.from("cm_members").update(upd).eq("user_id", S.user.id).select().single();
+            if (r.error) throw r.error;
+            S.me = m = r.data; S.members.set(S.user.id, r.data); paintMe();
+            step = 3; paint();
+          } catch (err) { fail(err); } finally { b.disabled = false; }
+        });
+      } else if (step === 3) {
+        body.innerHTML =
+          '<p class="eyebrow"><span class="dot"></span>Step 3 of 4</p><h3>Introduce yourself</h3>' +
+          '<p class="muted">A short hello in <b>Introductions</b> is the fastest way to meet people. Edit the prompts below.</p>' +
+          '<form class="stack" id="obIntro"><textarea name="body" maxlength="5000" rows="8" aria-label="Your introduction">' + esc(INTRO_TEMPLATE(m)) + "</textarea>" +
+          '<div class="ob-actions"><button class="btn btn-navy" type="submit">Post my introduction</button><button class="linkish" type="button" data-ob="next">Skip this step</button></div></form>';
+        var fi = $("#obIntro", body);
+        fi.addEventListener("submit", async function (e) {
+          e.preventDefault();
+          var text = fi.body.value.trim();
+          if (!text) { fi.body.focus(); return; }
+          var b = $("button[type=submit]", fi); b.disabled = true;
+          var r = await sb.from("cm_posts").insert({ author_id: S.user.id, category_id: "introductions", body: text }).select(POST_SELECT).single();
+          b.disabled = false;
+          if (r.error) { fail(r.error); return; }
+          toast("Introduction posted. Welcome!");
+          var box = $("#posts"); if (box) box.insertAdjacentHTML("afterbegin", postHTML(r.data));
+          step = 4; paint();
+        });
+      } else {
+        body.innerHTML =
+          '<p class="eyebrow"><span class="dot"></span>Step 4 of 4</p><h3>Stay in the loop</h3>' +
+          '<p class="muted">Choose what we email you about. You can change this anytime in My Profile.</p>' +
+          '<div id="obPrefs" class="prefs"><div class="loading">Loading…</div></div>' +
+          '<div class="ob-actions"><button class="btn btn-navy" type="button" data-ob="done">Go to the community</button></div>';
+        renderPrefs($("#obPrefs", body));
+      }
+      var h = $("h3", body); if (h) { h.setAttribute("tabindex", "-1"); h.focus(); }
+    }
+    body.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-ob]");
+      if (!b) return;
+      if (b.dataset.ob === "next") { step++; paint(); }
+      else d.close();
+    });
+    paint();
+  }
+
+  /* ---------- Email settings (toggles save straight away) ---------- */
+  var PREF_ROWS = [
+    ["messages", "Direct messages", "When a member messages you and you haven't read it yet."],
+    ["activity", "Comments", "Comments on your posts, and on posts you've commented on."],
+    ["announcements", "Announcements", "Official news from the RBD team."],
+    ["events", "New events", "Workshops, Q&As and live sessions."],
+    ["digest", "Weekly round-up", "Monday morning: top posts, upcoming events and new members."]
+  ];
+  async function renderPrefs(box) {
+    var r = await sb.from("cm_email_prefs").select("announcements, events, messages, activity, digest").eq("user_id", S.user.id).maybeSingle();
+    if (r.error) { box.innerHTML = '<p class="muted">Couldn\'t load your email settings.</p>'; return; }
+    var p = r.data || { announcements: true, events: true, messages: true, activity: true, digest: true };
+    box.innerHTML = PREF_ROWS.map(function (row) {
+      return '<label class="pref"><span><b>' + row[1] + "</b><small>" + row[2] + '</small></span>' +
+        '<input type="checkbox" role="switch" class="switch" data-pref="' + row[0] + '"' + (p[row[0]] ? " checked" : "") + "></label>";
+    }).join("") + '<p class="tiny muted">Emails go to your Academy sign-in address. Likes are never emailed.</p>';
+    box.addEventListener("change", async function (e) {
+      var c = e.target.closest("[data-pref]");
+      if (!c) return;
+      var upd = {}; upd[c.dataset.pref] = c.checked;
+      c.disabled = true;
+      var u = await sb.from("cm_email_prefs").update(upd).eq("user_id", S.user.id);
+      c.disabled = false;
+      if (u.error) { c.checked = !c.checked; fail(u.error); } else toast("Email settings saved.");
+    });
+  }
+
+  /* ---------- Reporting ---------- */
+  var REPORT_REASONS = ["Spam or unwanted selling", "Scam or suspicious link", "Harassment or hate", "Sharing private information", "Something else"];
+  function openReport(postId, commentId) {
+    var d = modal(commentId ? "Report this comment" : "Report this post",
+      '<form class="stack" id="reportForm"><p class="muted">Only the RBD team sees reports. Thanks for helping keep this space safe.</p>' +
+      '<fieldset class="reasons"><legend class="tiny muted">What\'s wrong?</legend>' +
+      REPORT_REASONS.map(function (r, i) { return '<label class="check"><input type="radio" name="reason" value="' + esc(r) + '"' + (i === 0 ? " checked" : "") + "> " + esc(r) + "</label>"; }).join("") +
+      '</fieldset><label>Anything else we should know? (optional)<textarea name="detail" maxlength="400" rows="3"></textarea></label>' +
+      '<div class="ob-actions"><button class="btn btn-navy" type="submit">Send report</button><button class="linkish" type="button" data-cancel>Cancel</button></div></form>');
+    var f = $("#reportForm", d);
+    $("[data-cancel]", f).addEventListener("click", function () { d.close(); });
+    f.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var reason = f.querySelector("input[name=reason]:checked").value, detail = f.detail.value.trim();
+      var b = $("button[type=submit]", f); b.disabled = true;
+      var r = await sb.from("cm_reports").insert({ post_id: postId || null, comment_id: commentId || null, reporter_id: S.user.id, reason: (reason + (detail ? ": " + detail : "")).slice(0, 500) });
+      b.disabled = false;
+      if (r.error && r.error.code !== "23505") { fail(r.error); return; }
+      d.close();
+      toast(r.error ? "You've already reported this. The team will review it." : "Thanks. The RBD team will review it.");
+    });
+  }
+
+  /* ---------- Editing a post ---------- */
+  function startEdit(postEl, p) {
+    if ($(".edit-form", postEl)) return;
+    var bodyEl = $(".post-body", postEl), more = $(".read-more", postEl);
+    var cats = S.cats.filter(function (c) { return !c.admin_only || S.isAdmin; });
+    var form = document.createElement("form");
+    form.className = "edit-form stack";
+    form.innerHTML = '<textarea name="body" maxlength="5000" rows="6" aria-label="Edit your post" required>' + esc(p.body) + "</textarea>" +
+      '<div class="composer-tools"><select name="category" aria-label="Category">' +
+      cats.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === p.category_id ? " selected" : "") + ">" + esc(c.name) + "</option>"; }).join("") +
+      '</select><button class="btn btn-navy btn-sm" type="submit">Save changes</button><button class="btn btn-line btn-sm" type="button" data-cancel>Cancel</button></div>';
+    bodyEl.hidden = true; if (more) more.hidden = true;
+    bodyEl.insertAdjacentElement("afterend", form);
+    form.body.focus();
+    $("[data-cancel]", form).addEventListener("click", function () { form.remove(); bodyEl.hidden = false; if (more) more.hidden = false; });
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var text = form.body.value.trim();
+      if (!text) return;
+      var b = $("button[type=submit]", form); b.disabled = true;
+      var r = await sb.from("cm_posts").update({ body: text, category_id: form.category.value }).eq("id", p.id).select(POST_SELECT).single();
+      b.disabled = false;
+      if (r.error) { fail(r.error); return; }
+      var full = currentRoute()[0] === "post";
+      postEl.insertAdjacentHTML("afterend", postHTML(r.data, { full: full }));
+      var fresh = postEl.nextElementSibling;
+      postEl.remove();
+      if (full) loadComments(fresh);
+      toast("Post updated.");
+    });
   }
   function paintMe() { $("#meBtn").innerHTML = avatar(S.me, "sm", false); }
 
@@ -246,11 +441,13 @@
       var who = n.actor_id ? member(n.actor_id) : null, name = who ? "<b>" + esc(who.display_name) + "</b>" : "";
       var text = {
         comment: name + " commented on your post",
+        reply: name + " also commented on a post you're following",
+        report: name + " reported a post. Review it in the Admin Dashboard",
         like: name + " liked your post",
         announcement: "New announcement from " + (name || "the RBD team"),
         event: "New event: <b>" + esc(n.cm_events ? n.cm_events.title : "") + "</b>"
       }[n.kind] || "Update";
-      var href = n.post_id ? "#/post/" + n.post_id : n.event_id ? "#/events" : "#/feed";
+      var href = n.kind === "report" ? "#/admin" : n.post_id ? "#/post/" + n.post_id : n.event_id ? "#/events" : "#/feed";
       return '<a class="notif' + (n.read_at ? "" : " unread") + '" href="' + href + '">' +
         (who ? avatar(who, "sm", false) : '<span class="av sm">' + icon("cal") + "</span>") +
         "<span>" + text + "<small>" + ago(n.created_at) + "</small></span></a>";
@@ -286,7 +483,7 @@
       else if (name === "messages") await renderMessages(main, parts[1]);
       else if (name === "events") await renderEvents(main);
       else if (name === "members") await renderMembers(main);
-      else if (name === "profile") await renderProfile(main, S.user.id);
+      else if (name === "profile") await renderProfile(main, S.user.id, parts[1] === "edit");
       else if (name === "u") await renderProfile(main, parts[1]);
       else if (name === "admin") await renderAdmin(main);
       else if (name === "guidelines") renderGuidelines(main);
@@ -306,16 +503,19 @@
     var cCount = p.cm_comments && p.cm_comments[0] ? p.cm_comments[0].count : 0;
     var long = p.body.length > 600 || p.body.split("\n").length > 9;
     var link = safeUrl(p.link_url), img = safeUrl(p.image_url);
-    var menu = (mine || S.isAdmin) ?
-      '<div class="post-menu"><button class="menu-btn" type="button" data-act="menu" aria-label="Post options">⋯</button><div class="pop pop-sm" hidden>' +
+    var menu = '<div class="post-menu"><button class="menu-btn" type="button" data-act="menu" aria-label="Post options">⋯</button><div class="pop pop-sm" hidden>' +
+      (mine ? '<button type="button" data-act="edit">Edit post</button>' : "") +
       (S.isAdmin ? '<button type="button" data-act="pin">' + (p.pinned ? "Unpin post" : "Pin to top") + "</button>" : "") +
-      '<button type="button" data-act="delete">Delete post</button></div></div>' : "";
+      (mine || S.isAdmin ? '<button type="button" data-act="delete">Delete post</button>' : "") +
+      (!mine ? '<button type="button" data-act="report">Report post</button>' : "") +
+      "</div></div>";
     return '<article class="card post' + (p.pinned ? " pinned" : "") + '" data-post="' + p.id + '">' +
       (p.pinned ? '<div class="pin-label">' + icon("pin") + (p.category_id === "announcement" ? "Official announcement" : "Pinned") + "</div>" : "") +
       '<div class="post-head">' + avatar(a) +
       '<div class="post-meta"><a class="name" href="#/u/' + a.user_id + '">' + esc(a.display_name) + adminTag(a.user_id) + "</a>" +
       '<div class="sub">' + (a.headline ? "<span>" + esc(a.headline) + "</span><span>·</span>" : "") +
       '<a href="#/post/' + p.id + '" class="muted" style="text-decoration:none">' + ago(p.created_at) + "</a>" +
+      (p.edited_at ? '<span class="muted" title="Edited ' + esc(fmtWhen(p.edited_at)) + '">· edited</span>' : "") +
       '<span class="tag' + (p.category_id === "announcement" ? " gold" : "") + '">' + esc(catName(p.category_id)) + "</span></div></div>" + menu + "</div>" +
       '<div class="post-body' + (long && !opts.full ? " clamp" : "") + '">' + linkify(p.body) + "</div>" +
       (long && !opts.full ? '<button class="read-more" type="button" data-act="more">Read more</button>' : "") +
@@ -343,7 +543,8 @@
     var a = member(c.author_id), canDel = c.author_id === S.user.id || S.isAdmin;
     return '<div class="comment" data-comment="' + c.id + '">' + avatar(a, "sm") +
       '<div style="flex:1;min-width:0"><div class="comment-bubble"><b>' + esc(a.display_name) + "</b> " + adminTag(a.user_id) + "<p>" + linkify(c.body) + "</p></div>" +
-      '<div class="comment-foot"><span>' + ago(c.created_at) + "</span>" + (canDel ? '<button class="linkish tiny" type="button" data-act="del-comment">Delete</button>' : "") + "</div></div></div>";
+      '<div class="comment-foot"><span>' + ago(c.created_at) + "</span>" + (canDel ? '<button class="linkish tiny" type="button" data-act="del-comment">Delete</button>' : "") +
+      (c.author_id !== S.user.id ? '<button class="linkish tiny" type="button" data-act="report-comment">Report</button>' : "") + "</div></div></div>";
   }
 
   // One handler for every post on any page
@@ -385,6 +586,14 @@
         toast("Post deleted.");
         if (currentRoute()[0] === "post") location.hash = "#/feed"; else postEl.remove();
       }
+      else if (act === "edit") {
+        btn.closest(".pop").hidden = true;
+        var ep = await sb.from("cm_posts").select("id, body, category_id").eq("id", id).single();
+        if (ep.error) throw ep.error;
+        startEdit(postEl, ep.data);
+      }
+      else if (act === "report") { btn.closest(".pop").hidden = true; openReport(id, null); }
+      else if (act === "report-comment") { openReport(id, btn.closest("[data-comment]").dataset.comment); }
       else if (act === "pin") {
         var pinned = postEl.classList.contains("pinned");
         var u = await sb.from("cm_posts").update({ pinned: !pinned }).eq("id", id);
@@ -423,7 +632,11 @@
     var postable = S.cats.filter(function (c) { return !c.admin_only || S.isAdmin; });
     main.innerHTML =
       '<div class="grid-feed"><div class="col">' +
-      '<section class="card hello"><h1>Welcome back, ' + esc(first) + '</h1><p>Catch up with the community, share a win or ask a question.</p></section>' +
+      '<section class="card hello"><h1>Welcome back' + (first && first !== "Member" ? ", " + esc(first) : "") + '</h1><p>Catch up with the community, share a win or ask a question.</p>' +
+      (!S.me.avatar_url || !S.me.headline
+        ? '<div class="nudge"><span>' + (!S.me.avatar_url && !S.me.headline ? "Add a photo and headline" : !S.me.avatar_url ? "Add a profile photo" : "Add a headline") +
+          ' so members know who you are.</span><a class="btn btn-line btn-sm" href="#/profile/edit">Complete profile</a></div>' : "") +
+      "</section>" +
       '<section class="card"><form class="composer" id="composer">' + avatar(S.me, "", false) +
       '<div class="composer-body"><textarea name="body" maxlength="5000" placeholder="Share something with the community…" aria-label="Write a post" required></textarea>' +
       '<div class="attach-preview" id="attachPreview"></div>' +
@@ -689,7 +902,7 @@
   }
 
   /* ---------- Profiles ---------- */
-  async function renderProfile(main, id) {
+  async function renderProfile(main, id, openEdit) {
     await ensureMembers([id]);
     var m = S.members.get(id);
     if (!m) { main.innerHTML = '<div class="card empty"><b>Member not found</b><a href="#/members">See all members</a></div>'; return; }
@@ -705,7 +918,16 @@
       "</section>" + (mine ? profileFormHTML(m) : "") +
       '<h2 style="font-size:18px">' + (mine ? "Your posts" : "Posts") + "</h2>" +
       (posts.data.length ? posts.data.map(function (p) { return postHTML(p); }).join("") : '<div class="card empty">No posts yet.</div>') + "</div>";
-    if (mine) bindProfileForm(m);
+    if (mine) {
+      bindProfileForm(m);
+      // Email settings sit between the profile card and the posts
+      var prefsCard = document.createElement("section");
+      prefsCard.className = "card"; prefsCard.id = "emailSettings";
+      prefsCard.innerHTML = '<div class="card-title">Email settings</div><div class="prefs"><div class="loading">Loading…</div></div>';
+      $("#profileForm", main).insertAdjacentElement("afterend", prefsCard);
+      renderPrefs($(".prefs", prefsCard));
+      if (openEdit) { $("#profileForm", main).hidden = false; $("#profileForm", main).display_name.focus(); }
+    }
   }
   function profileFormHTML(m) {
     return '<form class="card stack" id="profileForm" hidden><h2 style="font-size:18px">Edit profile</h2>' +
@@ -748,15 +970,32 @@
     var r = await Promise.all([
       sb.rpc("cm_admin_stats"),
       sb.from("cm_posts").select(POST_SELECT).eq("pinned", true).order("created_at", { ascending: false }),
-      loadMembers()
+      loadMembers(),
+      sb.from("cm_reports").select("*, cm_posts(id, body, author_id), cm_comments(id, body, author_id, post_id)").eq("status", "open").order("created_at", { ascending: false }).limit(50)
     ]);
     if (r[0].error) throw r[0].error;
-    var s = r[0].data, pinned = r[1].data || [];
+    var s = r[0].data, pinned = r[1].data || [], reports = (r[3] && r[3].data) || [];
+    await ensureMembers(reports.map(function (x) { return x.reporter_id; }).concat(reports.map(function (x) { return (x.cm_comments || x.cm_posts || {}).author_id; })));
     var all = Array.from(S.members.values()).sort(function (a, b) { return new Date(b.joined_at) - new Date(a.joined_at); });
     function stat(n, label) { return '<div class="card stat"><b class="grad">' + n + "</b><span>" + label + "</span></div>"; }
     main.innerHTML = '<div class="col">' +
       '<div class="page-head"><div><h1>Admin Dashboard</h1><p>Run the community: announcements, events and members.</p></div><a class="btn btn-line" href="#/events">Manage events</a></div>' +
-      '<div class="stats">' + stat(s.members, "Members") + stat(s.new_members_7d, "New this week") + stat(s.posts, "Posts") + stat(s.posts_7d, "Posts this week") + stat(s.comments, "Comments") + stat(s.upcoming_events, "Upcoming events") + "</div>" +
+      '<div class="stats">' + stat(s.members, "Members") + stat(s.new_members_7d, "New this week") + stat(s.posts, "Posts") + stat(s.posts_7d, "Posts this week") + stat(s.comments, "Comments") + stat(s.upcoming_events, "Upcoming events") +
+      stat(s.active_7d != null ? s.active_7d : "–", "Active this week") + stat(s.open_reports != null ? s.open_reports : 0, "Open reports") + "</div>" +
+      (s.academy_not_joined ? '<div class="card nudge-card"><b>' + s.academy_not_joined + " Academy learner" + (s.academy_not_joined === 1 ? " hasn't" : "s haven't") +
+        " joined yet.</b><span>They can sign in here with their Academy email and password. Invite them in your next Academy announcement or class.</span></div>" : "") +
+      '<section class="card" id="reports"><div class="card-title">Reports to review (' + reports.length + ")</div>" +
+      (reports.length ? reports.map(function (x) {
+        var target = x.cm_comments || x.cm_posts || {}, kind = x.comment_id ? "Comment" : "Post";
+        var postId = x.post_id || (x.cm_comments && x.cm_comments.post_id);
+        return '<div class="report" data-report="' + x.id + '"><div class="report-top"><span class="tag gold">' + kind + "</span><b>" + esc(x.reason) + "</b></div>" +
+          '<p class="report-quote">“' + esc((target.body || "This was already deleted.").slice(0, 220)) + "”</p>" +
+          '<p class="tiny muted">By ' + esc(member(target.author_id).display_name) + " · reported by " + esc(member(x.reporter_id).display_name) + " · " + ago(x.created_at) + "</p>" +
+          '<div class="row">' + (postId ? '<a class="btn btn-line btn-sm" href="#/post/' + postId + '">View</a>' : "") +
+          '<button class="btn btn-line btn-sm" type="button" data-resolve="' + x.id + '">Keep it, mark reviewed</button>' +
+          (target.id ? '<button class="btn btn-danger btn-sm" type="button" data-remove="' + x.id + '" data-kind="' + (x.comment_id ? "comment" : "post") + '" data-target="' + target.id + '">Delete ' + kind.toLowerCase() + "</button>" : "") +
+          "</div></div>";
+      }).join("") : '<p class="muted">Nothing to review. Members can report posts and comments from the ⋯ menu.</p>') + "</section>" +
       '<form class="card stack" id="annForm"><div class="card-title" style="margin:0">' + icon("mega") + 'Post an announcement</div>' +
       '<textarea name="body" maxlength="5000" placeholder="Write an announcement. Every member gets a notification." required></textarea>' +
       '<label class="check"><input type="checkbox" name="pin" checked> Pin to the top of the feed</label>' +
@@ -783,10 +1022,21 @@
       toast("Announcement published."); route();
     });
     main.addEventListener("click", async function (e) {
-      var b = e.target.closest("[data-unpin],[data-ban]");
+      var b = e.target.closest("[data-unpin],[data-ban],[data-resolve],[data-remove]");
       if (!b) return;
       try {
-        if (b.dataset.unpin) {
+        if (b.dataset.resolve) {
+          var rs = await sb.from("cm_reports").update({ status: "resolved" }).eq("id", b.dataset.resolve);
+          if (rs.error) throw rs.error;
+          toast("Marked as reviewed.");
+        } else if (b.dataset.remove) {
+          if (!confirm("Delete this " + b.dataset.kind + "? This can't be undone.")) return;
+          var del = await sb.from(b.dataset.kind === "comment" ? "cm_comments" : "cm_posts").delete().eq("id", b.dataset.target);
+          if (del.error) throw del.error;
+          // Deleting a post removes its reports; for comments, close the report too
+          if (b.dataset.kind === "comment") await sb.from("cm_reports").update({ status: "resolved" }).eq("id", b.dataset.remove);
+          toast("Deleted.");
+        } else if (b.dataset.unpin) {
           var u = await sb.from("cm_posts").update({ pinned: false }).eq("id", b.dataset.unpin);
           if (u.error) throw u.error;
         } else {
@@ -811,7 +1061,7 @@
       "<h2>3. No spam or unsolicited selling</h2><ul><li>No mass promotion, MLM, or repeated self-promotion.</li><li>Don't DM members to sell without their permission.</li><li>Job and client opportunities are welcome when they're clear and genuine.</li></ul>" +
       "<h2>4. Protect privacy</h2><ul><li>Don't share other people's personal details, screenshots of private chats or client information.</li><li>Never post passwords, IDs or payment details.</li></ul>" +
       "<h2>5. Be honest</h2><ul><li>Share real experiences. Don't misrepresent credentials or results.</li><li>Credit others when you share their work or ideas.</li></ul>" +
-      "<h2>6. Keep it safe</h2><ul><li>Watch out for scams. RBD will never ask for payment through a DM.</li><li>If something feels off, report it to <a href=\"mailto:" + esc(C.supportEmail) + "\">" + esc(C.supportEmail) + "</a>.</li></ul>" +
+      "<h2>6. Keep it safe</h2><ul><li>Watch out for scams. RBD will never ask for payment through a DM.</li><li>If something feels off, tap <b>⋯ → Report post</b> (or <b>Report</b> under a comment), or email <a href=\"mailto:" + esc(C.supportEmail) + "\">" + esc(C.supportEmail) + "</a>.</li></ul>" +
       "<h2>Moderation</h2><p>The RBD team may remove posts or pause access for anyone who breaks these guidelines. Thanks for helping us keep this community a great place to grow.</p></article>";
   }
 

@@ -1,34 +1,55 @@
 # Remote by Designs Community
 
-**Live address (once connected):** https://community.remotebydesigns.com
-**Current version:** `community-v1` (Oct 16, 2026)
+**Live address:** https://community.remotebydesigns.com
+**Current version:** `community-v2` (Oct 16, 2026)
 **Replaces:** https://remote-bond-hub.base44.app
 
 A members-only community for RBD learners, freelancers, aspiring VAs and remote professionals. It's a plain static site (no build step), hosted on Vercel. It uses the **same Supabase project as RBD Academy**, so members sign in with their Academy email and password.
 
 ---
 
+## What's new in v2 (Oct 16, 2026)
+
+- **Email notifications.** Members get an email about unread messages, comments on their posts, replies on posts they commented on, announcements and new events. Admins also get report alerts. Emails go out every 10 minutes, at most one per member per run, and only for things still unread after 5 minutes. Likes are never emailed.
+- **Weekly round-up.** Every Monday at 9:00 AM (Philippine time): top conversations, upcoming events and new members. It's skipped when there's nothing to share.
+- **Email settings.** Five on/off switches in **My Profile → Email settings**. Every email has one-click "turn off" and "unsubscribe from all" links.
+- **Welcome steps for new members.** On their first visit, members see four short steps: what the community is for, then photo/headline/location, then an introduction post (with prompts), then email settings. Closing it counts as "skip". The member card starts from their Academy name, headline and bio.
+- **Profile nudge.** The feed asks members without a photo or headline to complete their profile.
+- **Edit posts.** Authors can edit their own posts from the ⋯ menu; edited posts show "· edited".
+- **Report posts and comments.** ⋯ → Report post, or Report under a comment. Admins see them in **Admin Dashboard → Reports to review** (View, Keep it, Delete) and get a bell notification and email.
+- **Admin dashboard:** new "Active this week" and "Open reports" numbers, plus a reminder showing how many Academy learners haven't joined yet.
+- **Fix:** creating an event failed in v1 (a database notification rule error). Fixed in v2.
+
 ## Progress (updated Oct 16, 2026)
 
 **Done**
-- [x] Community built from the Base44 screenshot, restyled in RBD brand colours (Poppins, navy/teal/sky/gold, light + dark, phone layout).
-- [x] Database added to the *Remote By Designs Framework* Supabase project (shared with the Academy): `cm_*` tables, access rules, notifications, live updates, `community` image bucket.
-- [x] Access rules tested inside the real database (15 checks, all rolled back): signed-out visitors blocked, no posting as someone else, only admins post announcements, pin or create events, private messages hidden even from admins.
-- [x] Every page tested in a browser with sample data: no errors, no sideways scrolling on phones.
-- [x] Code in GitHub: `remotebydesigns-pro/community`, branch `main`.
-- [x] Deployed to Vercel (project `rbd-community`) with `community.remotebydesigns.com` attached.
+- [x] v1: community built, database added to the *Remote By Designs Framework* Supabase project, deployed to Vercel, DNS connected.
+- [x] v2 database changes applied (`supabase/community-v2.sql`) and tested inside the real database (15 checks, all rolled back): reports, email settings privacy, post editing, reply/report/event/announcement notifications.
+- [x] `community-email` function deployed, with two schedules in Supabase (pg_cron): `community-email-queue` (every 10 min) and `community-email-digest` (Mondays 01:00 UTC = 9:00 AM Manila). A preview email was sent to the admin to confirm sending works.
+- [x] Every new screen tested in a browser with sample data (22 checks), including phone width.
 
 **To do (owner)**
-- [ ] Cloudflare DNS: `CNAME community → cname.vercel-dns.com`, proxy off (section 2, step 4). The address won't open until this is done.
-- [ ] Supabase redirect URL: add `https://community.remotebydesigns.com/**` (section 2, step 2).
-- [ ] First real sign-in with the admin account, then post the welcome announcement and first events.
+- [ ] Redeploy `rbd-community` in Vercel so the site picks up v2 (see "Publishing a change" below). Until then the database and emails are already on v2, the screens are still v1.
+- [ ] Supabase redirect URL: add `https://community.remotebydesigns.com/**` (section 2, step 2), if not done yet.
+- [ ] Post the welcome announcement and the first events.
 - [ ] Revoke the Base44 access token that was shared in chat.
 - [ ] Optional: install the Vercel GitHub app for `remotebydesigns-pro` so pushes deploy automatically.
 
 **Open items**
-- The tests that edit, delete or pause (members can't edit others' posts, can't un-pause themselves, paused members are locked out) didn't run: the database tool needed an approval. The rules were checked by reading them. Re-test after the first real sign-in.
 - Old Base44 posts and members were **not** moved over (we only had a screenshot). Members re-join by signing in with their Academy account.
-- Supabase's security check flags some existing **Academy** functions callable without signing in (e.g. `wolf_reset`, `wolf_claim`). Worth confirming each one checks permissions itself. Not part of the community.
+
+## Emails: how they work
+
+| Piece | Where |
+|---|---|
+| Sending code | `supabase/functions/community-email/index.ts` (Supabase → Edge Functions → `community-email`) |
+| Mail server | Same SMTP secrets as the Academy (`SMTP_PASSWORD`, optional `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`). Sends from support@remotebydesigns.com as "RBD Community". |
+| Schedules | Supabase → Integrations → Cron: `community-email-queue`, `community-email-digest` |
+| Key | The schedules send a secret key stored in Supabase Vault as `cm_email_cron_key`; the function rejects calls without it. |
+| Member choices | Table `cm_email_prefs` (members can only see and change their own row) |
+
+To **pause all emails**, turn off both cron jobs in Supabase → Integrations → Cron. To **send yourself a sample round-up**, run in SQL Editor:
+`select net.http_post(url := 'https://heamxeoqtncuneeoreda.supabase.co/functions/v1/community-email', headers := jsonb_build_object('Content-Type','application/json','x-cron-key',(select decrypted_secret from vault.decrypted_secrets where name='cm_email_cron_key')), body := '{"mode":"preview"}'::jsonb);`
 
 ---
 
@@ -97,4 +118,4 @@ All rules live in the database (`supabase/community-v1.sql`), not the browser:
 - Private Academy data (emails, phone numbers, payments, coaching) is never exposed. The community has its own member cards (`cm_members`), created from the Academy name the first time someone opens the community.
 - Uploaded images go to the public `community` bucket in each member's own folder. Anyone with an image's link can view it, so don't post private documents.
 
-**Files:** `site/index.html`, `site/assets/community.js`, `site/assets/community.css`, `site/assets/config.js`, `site/assets/theme.js`, logos, `supabase/community-v1.sql`
+**Files:** `site/index.html`, `site/assets/community.js`, `site/assets/community.css`, `site/assets/config.js`, `site/assets/theme.js`, logos, `supabase/community-v1.sql`, `supabase/community-v2.sql`, `supabase/functions/community-email/index.ts`
