@@ -6,6 +6,8 @@
 //                         for admins, reports. One email per member per run; likes are never emailed.
 // POST {"mode":"digest"}  Monday 9:00 AM Manila (pg_cron). Weekly round-up: top posts, upcoming events,
 //                         new members. Sent once per week; skipped when there's nothing to share.
+// POST {"mode":"birthdays"} Daily 8:00 AM Manila (pg_cron). Bell notification + birthday email for members whose
+//                         birthday (month/day, set in My Profile) is today. Feb 29 birthdays get Feb 28 in other years.
 // POST {"mode":"preview"} Sends a sample digest to admins only (to check the email looks right).
 // POST {"mode":"dryrun"}  Returns what the queue run would send, without sending or marking anything.
 // GET  ?u=<token>&t=<type|all>  One-click unsubscribe link used in every email.
@@ -23,16 +25,16 @@ const MAX_EMAILS_PER_RUN = 200;
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
-type Prefs = { user_id: string; announcements: boolean; events: boolean; messages: boolean; activity: boolean; digest: boolean; token: string };
+type Prefs = { user_id: string; announcements: boolean; events: boolean; messages: boolean; activity: boolean; digest: boolean; jobs: boolean; token: string };
 type Note = { id: string; user_id: string; actor_id: string | null; kind: string; post_id: string | null; event_id: string | null; read_at: string | null; created_at: string };
 
 const PREF_FOR: Record<string, keyof Prefs | null> = {
-  message: "messages", comment: "activity", reply: "activity",
+  message: "messages", comment: "activity", reply: "activity", group: "activity", job: "jobs",
   announcement: "announcements", event: "events", report: null, // reports always go to admins
 };
 const PREF_LABEL: Record<string, string> = {
   messages: "message emails", activity: "comment emails", announcements: "announcement emails",
-  events: "event emails", digest: "the weekly round-up", all: "all community emails",
+  events: "event emails", digest: "the weekly round-up", jobs: "job alerts", all: "all community emails",
 };
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -138,7 +140,7 @@ async function runQueue(dry: boolean) {
   for (const [uid, all] of byUser) {
     const me = people.get(uid), p = prefs.get(uid);
     const send = all.filter((n) => {
-      if (n.read_at || n.kind === "like" || !me || me.banned || !p) return false;
+      if (n.read_at || n.kind === "like" || n.kind === "birthday" || !me || me.banned || !p) return false;
       const key = PREF_FOR[n.kind];
       return key === null ? n.kind === "report" : key ? !!p[key] : false;
     });
@@ -159,6 +161,8 @@ async function runQueue(dry: boolean) {
       else if (n.kind === "reply") rows.push(row(`<b>${who}</b> also commented on a post you're following`, post ? `“${esc(snip(post, 110))}”` : "", `${SITE}#/post/${n.post_id}`));
       else if (n.kind === "announcement") rows.push(row(`<b>New announcement</b> from the RBD team`, esc(snip(post, 180)), `${SITE}#/post/${n.post_id}`));
       else if (n.kind === "event") { const e = events.get(n.event_id || ""); if (e) rows.push(row(`<b>New event:</b> ${esc(e.title)}`, esc(when(e.starts_at)), `${SITE}#/events`)); }
+      else if (n.kind === "group") rows.push(row(`<b>${who}</b> posted in your private group`, post ? `“${esc(snip(post, 110))}”` : "", `${SITE}#/post/${n.post_id}`));
+      else if (n.kind === "job") rows.push(row(`<b>New on the Job Board</b>`, esc(snip(post, 160)), `${SITE}#/jobs`));
       else if (n.kind === "report") rows.push(row(`<b>${who}</b> reported a post`, "Review it in the Admin Dashboard.", `${SITE}#/admin`));
     }
     if (!rows.length) { if (!dry) await db.from("cm_notifications").update({ emailed_at: new Date().toISOString() }).in("id", ids); continue; }
@@ -171,6 +175,8 @@ async function runQueue(dry: boolean) {
         : k === "reply" ? `New comment on a post you're following`
         : k === "announcement" ? `New announcement in the RBD Community`
         : k === "event" ? `New event: ${events.get(send[0].event_id || "")?.title || "RBD Community"}`
+        : k === "group" ? `New post in your private group`
+        : k === "job" ? `New opening on the RBD Job Board`
         : `A post was reported in the RBD Community`)
       : `You have ${rows.length} new updates in the RBD Community`;
     const unsubType = single ? (PREF_FOR[k] as string) || "all" : "all";
@@ -201,14 +207,15 @@ async function runQueue(dry: boolean) {
 async function digestContent() {
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
   const [postsR, eventsR, newR] = await Promise.all([
-    db.from("cm_posts").select("id, body, author_id, category_id, created_at, cm_likes(count), cm_comments(count)").gte("created_at", weekAgo).limit(200),
+    db.from("cm_posts").select("id, body, author_id, category_id, created_at, job, job_closed, cm_likes(count), cm_comments(count)").is("group_id", null).gte("created_at", weekAgo).limit(200),
     db.from("cm_events").select("id, title, starts_at").gte("starts_at", new Date().toISOString()).lte("starts_at", new Date(Date.now() + 14 * 864e5).toISOString()).order("starts_at").limit(5),
     db.from("cm_members").select("user_id, display_name").gte("joined_at", weekAgo).eq("banned", false).order("joined_at", { ascending: false }).limit(50),
   ]);
-  const posts = (postsR.data || []).map((p: any) => ({ ...p, score: (p.cm_likes?.[0]?.count || 0) + 2 * (p.cm_comments?.[0]?.count || 0) }))
+  const jobs = (postsR.data || []).filter((p: any) => p.category_id === "jobs" && !p.job_closed).slice(0, 5);
+  const posts = (postsR.data || []).filter((p: any) => p.category_id !== "jobs").map((p: any) => ({ ...p, score: (p.cm_likes?.[0]?.count || 0) + 2 * (p.cm_comments?.[0]?.count || 0) }))
     .sort((a: any, b: any) => b.score - a.score || +new Date(b.created_at) - +new Date(a.created_at)).slice(0, 5);
   const people = await membersFor(posts.map((p: any) => p.author_id));
-  return { posts, people, events: eventsR.data || [], newbies: newR.data || [], postCount: (postsR.data || []).length };
+  return { posts, jobs, people, events: eventsR.data || [], newbies: newR.data || [], postCount: (postsR.data || []).length };
 }
 function digestRows(c: Awaited<ReturnType<typeof digestContent>>) {
   let rows = "";
@@ -219,6 +226,10 @@ function digestRows(c: Awaited<ReturnType<typeof digestContent>>) {
       return row(`<b>${esc(c.people.get(p.author_id)?.display_name || "A member")}</b>: “${esc(snip(p.body, 120))}”`,
         `${likes} like${likes === 1 ? "" : "s"} · ${comments} comment${comments === 1 ? "" : "s"}`, `${SITE}#/post/${p.id}`);
     }).join("");
+  }
+  if (c.jobs.length) {
+    rows += `<h2 style="font-size:15px;margin:18px 0 10px;color:#0D2238">New openings</h2>`;
+    rows += c.jobs.map((j: any) => row(`<b>${esc(j.job?.title || snip(j.body, 60))}</b>`, esc([j.job?.company, j.job?.type, j.job?.pay].filter(Boolean).join(" · ")), `${SITE}#/jobs`)).join("");
   }
   if (c.events.length) {
     rows += `<h2 style="font-size:15px;margin:18px 0 10px;color:#0D2238">Coming up</h2>`;
@@ -239,7 +250,7 @@ function isoWeek(d = new Date()) {
 }
 async function runDigest(previewOnly: boolean) {
   const c = await digestContent();
-  const hasNews = c.posts.length || c.events.length || c.newbies.length;
+  const hasNews = c.posts.length || c.jobs.length || c.events.length || c.newbies.length;
   if (!hasNews && !previewOnly) return { sent: 0, skipped: "nothing to share this week" };
   const runId = `digest-${isoWeek()}`;
   if (!previewOnly) {
@@ -284,6 +295,48 @@ async function runDigest(previewOnly: boolean) {
   return { sent, run: previewOnly ? "preview" : runId };
 }
 
+// ---------- Birthdays ----------
+async function runBirthdays() {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).split("-");
+  const y = +parts[0], mo = +parts[1], d = +parts[2];
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const runId = `birthdays-${parts.join("-")}`;
+  const claim = await db.from("cm_email_runs").insert({ id: runId });
+  if (claim.error) return { sent: 0, skipped: `already ran (${runId})` };
+  let q = db.from("cm_birthdays").select("user_id, month, day").eq("month", mo);
+  const { data } = await q;
+  const today = (data || []).filter((b: any) => b.day === d || (!leap && mo === 2 && d === 28 && b.day === 29));
+  if (!today.length) return { sent: 0, birthdays: 0 };
+  const ids = today.map((b: any) => b.user_id);
+  const [prefs, people] = await Promise.all([prefsFor(ids), membersFor(ids)]);
+  let sent = 0, notified = 0;
+  const { user: from, t } = transport();
+  for (const uid of ids) {
+    const me = people.get(uid), p = prefs.get(uid);
+    if (!me || me.banned) continue;
+    await db.from("cm_notifications").insert({ user_id: uid, kind: "birthday", emailed_at: new Date().toISOString() });
+    notified++;
+    if (!p || !(p.announcements || p.events || p.messages || p.activity || p.digest || p.jobs)) continue; // unsubscribed from everything
+    const to = await emailOf(uid);
+    if (!to) continue;
+    try {
+      await t.sendMail({
+        from: `"RBD Community" <${from}>`, to, subject: `Happy birthday, ${first(me.display_name)}!`,
+        html: layout({
+          preheader: "Everyone at Remote by Designs is celebrating you today.",
+          heading: `Happy birthday, ${first(me.display_name)}!`,
+          intro: "From all of us at Remote by Designs: thank you for learning, sharing and growing with the community. We hope this year brings great clients, steady wins and plenty of rest.",
+          rows: "", cta: "Celebrate with the community", ctaUrl: SITE, token: p.token, unsubType: "all",
+        }),
+        text: `Happy birthday, ${first(me.display_name)}!\n\nFrom all of us at Remote by Designs, thank you for being part of the community.\n\n${SITE}`,
+      });
+      sent++;
+    } catch (e) { console.error("birthday send failed", uid, e); }
+  }
+  await db.from("cm_email_runs").update({ sent }).eq("id", runId);
+  return { birthdays: today.length, notified, sent };
+}
+
 // ---------- Unsubscribe page ----------
 function page(title: string, body: string, status = 200) {
   return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>
@@ -297,7 +350,7 @@ function page(title: string, body: string, status = 200) {
 async function unsubscribe(url: URL) {
   const token = url.searchParams.get("u") || "", t = url.searchParams.get("t") || "all";
   if (!/^[0-9a-f-]{36}$/i.test(token)) return page("Link not recognised", "This unsubscribe link looks incomplete. You can change your emails anytime from My Profile.", 400);
-  const keys = ["announcements", "events", "messages", "activity", "digest"];
+  const keys = ["announcements", "events", "messages", "activity", "digest", "jobs"];
   const upd: Record<string, boolean> = {};
   (t === "all" ? keys : keys.includes(t) ? [t] : []).forEach((k) => (upd[k] = false));
   if (!Object.keys(upd).length) return page("Link not recognised", "You can change your emails anytime from My Profile.", 400);
@@ -321,6 +374,7 @@ Deno.serve(async (req) => {
   const mode = String(body.mode || "queue");
   try {
     const result = mode === "digest" ? await runDigest(false)
+      : mode === "birthdays" ? await runBirthdays()
       : mode === "preview" ? await runDigest(true)
       : mode === "dryrun" ? await runQueue(true)
       : await runQueue(false);

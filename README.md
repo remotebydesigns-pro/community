@@ -1,12 +1,24 @@
 # Remote by Designs Community
 
 **Live address:** https://community.remotebydesigns.com
-**Current version:** `community-v2` (Oct 16, 2026)
+**Current version:** `community-v3` (Oct 16, 2026)
 **Replaces:** https://remote-bond-hub.base44.app
 
 A members-only community for RBD learners, freelancers, aspiring VAs and remote professionals. It's a plain static site (no build step), hosted on Vercel. It uses the **same Supabase project as RBD Academy**, so members sign in with their Academy email and password.
 
 ---
+
+## What's new in v3 (Oct 16, 2026)
+
+- **Job Board.** New "Job Board" menu page and topic. Only admins post jobs, using a form (role, company, type, pay, location/hours, apply link or email, apply-by date). Members get a bell notification and a "Job alerts" email (they can switch it off). Admins can mark a job **Filled** or reopen it from the ⋯ menu. New openings also appear in the weekly round-up.
+- **Topics.** Career Questions and Remote Work Tips are retired (hidden, not deleted). Use General Discussion. Topics now scroll as a slow marquee that pauses on hover.
+- **Private groups.** A **Bootcamp** group with its own feed, visible only to its members (and admins). Admins add or remove people with **Manage members** on the group page or the Admin Dashboard. New posts notify group members. Group posts never show in the main feed or the weekly round-up.
+- **Links instead of uploads in posts.** Posts take an **Image link** and a **Video link** (YouTube, Vimeo, Loom, Google Drive, or a direct .mp4) instead of file uploads. Profile photos still upload.
+- **Badges** (typographic marks, no emoji): RBD Team, Top Contributor (top 3 of the last 30 days), Founding Member (first 100), Said Hello, First Post, Conversation Starter (10 posts), Helpful Voice (25 comments), Crowd Favorite (25 likes received), Event Regular (3 events), Bootcamper. Shown on profiles, member cards and next to names. Members page has a 30-day leaderboard (3 points per post, 2 per comment, 1 per like received).
+- **Birthdays.** Month and day only, in My Profile (and in the welcome steps). Members choose whether it shows on their profile. On the day, they get a bell notification and a birthday email (8:00 AM Philippine time), and the feed shows a "Birthdays today" card.
+- **Design:** menu selected/hover style matches the portfolio site, livelier cards (category colour accents, hover lift), compact event cards with a Details button, a redesigned Admin Dashboard (greeting banner with quick actions, colour stat tiles, 14-day activity chart, top contributors, upcoming birthdays, groups), solid-colour logo tile, WorkLedger link in the sidebar.
+- **Phones:** text boxes are 16px so the phone no longer zooms in when you tap them, and nothing can push the page sideways.
+- Database changes: `supabase/community-v3.sql` (applied Oct 16, 2026). New daily schedule `community-email-birthdays`.
 
 ## What's new in v2 (Oct 16, 2026)
 
