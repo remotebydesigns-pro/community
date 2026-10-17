@@ -1221,9 +1221,9 @@
     await Promise.all([loadMembers(), loadStats(true)]);
     var list = Array.from(S.members.values()).filter(function (m) { return !m.banned; });
     var board = Array.from(S.stats.values()).filter(function (x) { return x.score_30d > 0; }).sort(function (a, b) { return b.score_30d - a.score_30d; }).slice(0, 5);
-    main.innerHTML = '<div class="col"><div class="page-head"><div><h1>Members</h1><p>' + list.length + " people learning and growing together.</p></div>" +
+    main.innerHTML = '<div class="col"><div class="page-head"><div><h1>Members</h1><p>' + list.length + (list.length === 1 ? " person" : " people") + " learning and growing together.</p></div>" +
       '<input class="search" type="search" id="memberSearch" placeholder="Search by name or role…" aria-label="Search members"></div>' +
-      '<section class="card leaderboard"><div class="card-title">' + icon("spark") + 'Top contributors · last 30 days<button class="linkish" type="button" id="howBadges">How badges work</button></div>' +
+      '<section class="card leaderboard"><div class="card-title">' + icon("spark") + "Top contributors <span class=\"ct-sub\">· last 30 days</span>" + '<button class="linkish" type="button" id="howBadges">How badges work</button></div>' +
       (board.length ? '<ol class="lb">' + board.map(function (x, i) {
         var m = member(x.user_id);
         return '<li><a href="#/u/' + m.user_id + '"><span class="rank-n">' + (i + 1) + "</span>" + avatar(m, "sm", false) + '<span class="lb-name"><b>' + esc(m.display_name) + "</b><small>" +

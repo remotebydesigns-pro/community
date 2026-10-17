@@ -339,7 +339,6 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);
   .date-tile{width:64px;height:70px;border-radius:14px}
   .date-tile b{font-size:24px}
   .field-row{grid-template-columns:1fr}
-  .tb-actions [data-theme-toggle]{display:none}
 }
 
 /* ---------- v2: dialogs, welcome steps, email settings, reports, editing ---------- */
@@ -773,3 +772,57 @@ html,body{max-width:100%;overflow-x:clip}
 .profile-card .profile-top .profile-hero > .av.lg{border-radius:50%;border:3px solid rgba(255,255,255,.35);background:#0D2238}
 .profile-card .profile-top .profile-hero > .av.lg img{border-radius:50%;width:100%;height:100%;object-fit:cover}
 @media (max-width:720px){.profile-card .profile-top .profile-hero > .av.lg{border-radius:50%}}
+
+/* =========================================================
+   v4.2: phone polish + aligned badges
+   ========================================================= */
+/* Badges: equal-height tiles, tags and progress bars line up */
+.badges{align-items:stretch}
+.badge{height:100%}
+.badge small{min-height:calc(2 * 1.35em)}
+.badge .earned,.badge .prog{margin-top:auto}
+.badge .prog + .prog-n{margin-top:2px}
+
+/* Night-mode button shows on phones too */
+.tb-actions [data-theme-toggle]{display:grid}
+
+/* Phone drawer: scrolls all the way, nothing hidden under the browser bar */
+@media (max-width:900px){
+  .side{top:12px;bottom:auto;height:auto;max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;padding-bottom:calc(22px + env(safe-area-inset-bottom,0px))}
+}
+
+/* Leaderboard */
+.ct-sub{color:var(--muted);font-weight:600}
+.lb-name b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb a{min-width:0}
+
+@media (max-width:720px){
+  /* Job card: status sits in the corner, less empty space */
+  .is-job .job{position:relative;padding:14px}
+  .job-top{flex-wrap:nowrap;gap:10px;padding-right:58px}
+  .job-ico{width:36px;height:36px;border-radius:11px}
+  .job h3{font-size:16px}
+  .job-status{position:absolute;top:14px;right:14px;margin:0;font-size:10.5px;padding:3px 8px}
+  .job-bits{gap:5px;margin-top:5px}
+  .job-bits span{font-size:11.5px;padding:2px 8px}
+  .job-close{margin-top:8px}
+  .job-actions{gap:6px;margin-top:10px}
+  .job-actions .job-more{margin-left:auto}
+  /* Post header: one badge mark on phones so names don't wrap awkwardly */
+  .post-meta .name .bmark ~ .bmark{display:none}
+  .post-meta .sub{row-gap:2px}
+  /* Leaderboard */
+  .leaderboard .card-title{flex-wrap:nowrap}
+  .ct-sub{display:none}
+  .lb .bmark{display:none}
+  .lb a{gap:8px;padding:8px 6px}
+  /* Profile banner: stacked and centred */
+  .profile-card .profile-top{padding:22px 18px 20px}
+  .profile-card .profile-top .profile-hero{flex-direction:column;align-items:center;text-align:center;gap:10px}
+  .profile-card .profile-top .profile-hero > div{min-width:0!important;width:100%}
+  .profile-card .profile-top .profile-hero h1{justify-content:center;font-size:22px}
+  .profile-card .profile-top .profile-hero > .av.lg{width:76px;height:76px}
+  .profile-card .profile-top .profile-hero > .btn{padding:7px 16px;font-size:13px}
+}
+@media (max-width:720px){ .post-meta .name .bmark{display:none} .badge b{min-height:calc(2 * 1.25em);display:flex;align-items:center;justify-content:center} }
+.badge b{min-height:calc(2 * 1.25em);display:flex;align-items:center;justify-content:center}
