@@ -8,6 +8,12 @@ A members-only community for RBD learners, freelancers, aspiring VAs and remote 
 
 ---
 
+## Fix: password reset (Oct 18, 2026)
+
+- **Reset links now open the "Choose a new password" form.** Before, tapping the link in the reset email signed the member in and dropped them on the feed, so they never got to set a new password. (The page loaded the feed before it noticed the link was a reset link.)
+- **Expired or used links** now show a clear message: type your email and tap **Forgot password** to get a new one.
+- Code: `site/assets/community.js` (no database changes). Released through [PR #1](https://github.com/remotebydesigns-pro/community/pull/1) and confirmed working on the live site.
+
 ## What's new in v4 (Oct 16, 2026)
 
 - **Profile header fixed:** the name and headline now sit below the colour band, so they're always readable.
@@ -40,20 +46,22 @@ A members-only community for RBD learners, freelancers, aspiring VAs and remote 
 - **Admin dashboard:** new "Active this week" and "Open reports" numbers, plus a reminder showing how many Academy learners haven't joined yet.
 - **Fix:** creating an event failed in v1 (a database notification rule error). Fixed in v2.
 
-## Progress (updated Oct 16, 2026)
+## Progress (updated Oct 18, 2026)
 
 **Done**
 - [x] v1: community built, database added to the *Remote By Designs Framework* Supabase project, deployed to Vercel, DNS connected.
 - [x] v2 database changes applied (`supabase/community-v2.sql`) and tested inside the real database (15 checks, all rolled back): reports, email settings privacy, post editing, reply/report/event/announcement notifications.
 - [x] `community-email` function deployed, with two schedules in Supabase (pg_cron): `community-email-queue` (every 10 min) and `community-email-digest` (Mondays 01:00 UTC = 9:00 AM Manila). A preview email was sent to the admin to confirm sending works.
 - [x] Every new screen tested in a browser with sample data (22 checks), including phone width.
+- [x] v2 to v4 screens live on community.remotebydesigns.com.
+- [x] Vercel is connected to GitHub: every push to `main` deploys automatically.
+- [x] Supabase redirect URL for community.remotebydesigns.com works (reset links reach the community).
+- [x] Password reset fixed (Oct 18, 2026).
 
 **To do (owner)**
-- [ ] Redeploy `rbd-community` in Vercel so the site picks up v2 (see "Publishing a change" below). Until then the database and emails are already on v2, the screens are still v1.
-- [ ] Supabase redirect URL: add `https://community.remotebydesigns.com/**` (section 2, step 2), if not done yet.
 - [ ] Post the welcome announcement and the first events.
 - [ ] Revoke the Base44 access token that was shared in chat.
-- [ ] Optional: install the Vercel GitHub app for `remotebydesigns-pro` so pushes deploy automatically.
+- [ ] Decide how automatic posting should work (Job Board first): where jobs come from, how often, and whether posts publish straight away or wait as drafts. See "Posting automatically" below.
 
 **Open items**
 - Old Base44 posts and members were **not** moved over (we only had a screenshot). Members re-join by signing in with their Academy account.
@@ -100,9 +108,15 @@ Light/dark mode follows the device until someone taps the sun/moon (same as the 
 4. **Point the address at Vercel.** Cloudflare → remotebydesigns.com → **DNS** → **Add record**: type `CNAME`, name `community`, target `cname.vercel-dns.com`, proxy **off** (grey cloud, DNS only). Vercel issues the HTTPS certificate within a few minutes.
 5. **Seed it.** Sign in with your admin account → **Admin Dashboard** → post the welcome announcement → **Events** → add the first events.
 
-**Publishing a change:** push to `main`, put the new commit's ID into `site/vercel.json`, then redeploy `rbd-community` in Vercel. Or, simpler: install the Vercel GitHub app for `remotebydesigns-pro` (Vercel → project → Settings → Git) so every push deploys automatically. To undo a release: Vercel → Deployments → previous one → **Promote to Production**.
+**Publishing a change:** commit the change, put that commit's ID into `site/vercel.json` (the assets are pinned to one commit), commit again, then merge to `main`. Vercel deploys `main` automatically. To undo a release: Vercel → Deployments → previous one → **Promote to Production**.
 
 The `rbd-community.vercel.app` address asks for a Vercel login (Vercel's default protection). Members should use community.remotebydesigns.com.
+
+**Posting automatically (not set up yet).** A Job Board post is a row in `cm_posts` with `category_id = 'jobs'` and the details in `job`. Adding the row this way sends the bell notifications and job-alert emails on its own. Two options, both run in the cloud with no computer on:
+1. **Claude scheduled task:** Claude runs on a schedule, finds or writes the content (for example new remote VA jobs from sources you choose), then posts it as an admin through the Supabase connection. Best when the content needs judgment or writing.
+2. **Supabase schedule:** a pg_cron job (like the email schedules) publishes jobs you queued ahead of time. Best when the content is already written.
+
+How to post from code is in `.claude/skills/rbd-community/SKILL.md`.
 
 ---
 
@@ -114,6 +128,7 @@ The `rbd-community.vercel.app` address asks for a Vercel login (Vercel's default
 | Remove someone | Admin Dashboard → Members → **Pause access**. **Restore** undoes it. |
 | Pin / unpin a post | ⋯ menu on the post (admins), or **Unpin** on the Admin Dashboard. |
 | Add / rename a category | Supabase → `cm_categories`. `admin_only` = only admins can post there. `sort` = order of the chips. |
+| Members say a reset link didn't work | The link works once and expires. Ask them to tap **Forgot password** again and use the newest email. |
 | Change links, support email, Supabase keys | `site/assets/config.js`. |
 | Change colours | Tokens at the top of `site/assets/community.css` (same as the main site). |
 
