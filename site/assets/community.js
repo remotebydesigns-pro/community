@@ -3,13 +3,17 @@
 (function () {
   "use strict";
   var C = window.RBD_COMMUNITY;
+  /* Read the reset-link markers before Supabase consumes and clears the URL hash. */
+  var linkHash = new URLSearchParams(location.hash.replace(/^#/, ""));
+  var recoveryLink = linkHash.get("type") === "recovery";
+  var linkError = linkHash.get("error_description");
   var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey);
 
   var S = {
     user: null, me: null, isAdmin: false,
     members: new Map(), admins: new Set(), cats: [],
     cat: "all", feedOffset: 0, entered: false, channel: null,
-    thread: null, authMode: "signin",
+    thread: null, authMode: recoveryLink ? "reset" : "signin",
     groups: [], feedGroup: null, stats: new Map(), statsAt: 0, topIds: [], bdays: new Map(), awards: new Map(), applied: new Map()
   };
   var PAGE = 20;
@@ -280,6 +284,7 @@
       S.groups = res[4].data || [];
       S.admins = new Set((res[2].data || []).map(function (x) { return typeof x === "string" ? x : x.cm_admin_ids; }));
     } catch (err) { S.entered = false; fail(err); return; }
+    if (S.authMode === "reset") { S.entered = false; return; }
     $("#auth").hidden = true; $("#app").hidden = false;
     $("#adminNav").hidden = !S.isAdmin;
     paintMe();
@@ -1546,14 +1551,19 @@
   }
 
   /* ---------- Start ---------- */
+  function showRecovery() { S.entered = false; $("#app").hidden = true; $("#auth").hidden = false; setAuthMode("reset"); authMsg("Choose a new password for your account."); }
   sb.auth.onAuthStateChange(function (event, session) {
-    if (event === "PASSWORD_RECOVERY") { S.entered = false; $("#app").hidden = true; $("#auth").hidden = false; setAuthMode("reset"); authMsg("Choose a new password for your account."); return; }
+    if (event === "PASSWORD_RECOVERY") { showRecovery(); return; }
     if (event === "SIGNED_OUT") { showAuth(); return; }
     if (session && session.user && S.authMode !== "reset") setTimeout(function () { enter(session.user); }, 0);
   });
   sb.auth.getSession().then(function (r) {
     var session = r.data.session;
-    if (session) enter(session.user);
-    else { setAuthMode("signin"); showAuth(); }
+    if (recoveryLink && session) showRecovery();
+    else if (session) enter(session.user);
+    else {
+      setAuthMode("signin"); showAuth();
+      if (linkError) authMsg(/expired|invalid/i.test(linkError) ? "That reset link has expired or was already used. Type your email and tap Forgot password to get a new one." : linkError, "err");
+    }
   });
 })();

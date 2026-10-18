@@ -25,7 +25,7 @@
   "rewrites": [
     {
       "source": "/assets/:path*",
-      "destination": "https://cdn.jsdelivr.net/gh/remotebydesigns-pro/community@5dbd5531b56ba831e8065196926e0b84040a8fd2/site/assets/:path*"
+      "destination": "https://cdn.jsdelivr.net/gh/remotebydesigns-pro/community@44320713c76ca2b583d3671884327daf4e8742e0/site/assets/:path*"
     }
   ]
 }
